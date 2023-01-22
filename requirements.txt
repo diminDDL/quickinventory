@@ -1,0 +1,5 @@
+toml
+inventree
+anytree
+requests
+parsel
