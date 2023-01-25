@@ -18,6 +18,7 @@ from inventree.part import PartCategory
 from inventree.part import Part
 from inventree.stock import StockLocation
 from backend.file import fileHandler
+import backend.utils
 from parsel import Selector
 
 
@@ -49,6 +50,8 @@ def main():
         data = fs.readCredentials()
         server_url = "http://" + data["server"]["ip"]
         token = data["server"]["token"]
+
+        utils = backend.utils.utils()
 
         print("Connecting to InvenTree...")
         api = InvenTreeAPI(server_url, token=token)
@@ -118,6 +121,7 @@ def main():
             print("Querying LCSC...")
             response = requests.get(query)
             fields = {}
+            package = ""
             # fields["category"] = ""
             # fields["name"] = ""           p
             # fields["description"] = ""    p
@@ -132,7 +136,9 @@ def main():
                     sel = Selector(response.text)
                     fields["name"] = cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[2]/td[2]").get()).strip()
                     fields["description"] = cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[8]/td[2]").get()).strip()
+                    package = cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]").get()).strip()
                     fields["link"] = response.url
+
                 break
             except TypeError:
                 print("Invalid part number!")
@@ -141,7 +147,26 @@ def main():
         print("Part name: " + fields["name"])
         print("Part description: " + fields["description"])
         print("Part link: " + fields["link"])
+        print("Part package: " + package)
+        infoDict = utils.parseComponent(fields["description"])
+        print("Part info: " + str(infoDict))
 
+        # construct template using: <value> <package> <voltage rating (for capacitors)>/<power rating (for resistors)>/<curent>
+        # in one line we check if this is a resistor or a capacitor, we check it depending on if res_value or cap_value keys are present in the infoDict
+
+        if "res_value" in infoDict and "ind_value" not in infoDict:
+            template = infoDict["res_value"] + " " + package + " " + infoDict["power_value"]
+        elif "cap_value" in infoDict:
+            template = infoDict["cap_value"] + " " + package + " " + infoDict["volt_value"]
+        elif "ind_value" in infoDict:
+            template = infoDict["ind_value"] + " " + package + " " + infoDict["amp_value"]
+        else:
+            template = ""
+        
+        print("Confirm/enter the template: ")
+        template = utils.input_with_prefill(text=template, prompt="")
+
+        print(f"template: {template}")
 
         #items = StockItem.list(api, location=1, part=1)
         # for i in parts:
