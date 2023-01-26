@@ -12,13 +12,14 @@ import os
 import sys, traceback
 import requests
 import re
+import backend.utils
+from difflib import get_close_matches
 from anytree import Node, RenderTree, search
 from inventree.api import InvenTreeAPI
 from inventree.part import PartCategory
 from inventree.part import Part
 from inventree.stock import StockLocation
 from backend.file import fileHandler
-import backend.utils
 from parsel import Selector
 
 
@@ -57,10 +58,13 @@ def main():
         api = InvenTreeAPI(server_url, token=token)
 
         parts = Part.list(api)
+        #attrs = vars(parts[0])
+        #print(', '.join("%s: %s" % item for item in attrs.items()))
+        # print(Part.create.__code__.co_varnames)
         categories = PartCategory.list(api)
         locations = StockLocation.list(api)
-        #print(len(parts))
-        #print(len(categories))
+        # print(len(parts))
+        # print(len(categories))
         # print(categories[2].name)
         # print(categories[2].getParentCategory())
         # print(categories[0].getChildCategories())
@@ -134,9 +138,9 @@ def main():
                     print("Query successful!")
                     print("Parsing data...")
                     sel = Selector(response.text)
-                    fields["name"] = cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[2]/td[2]").get()).strip()
-                    fields["description"] = cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[8]/td[2]").get()).strip()
-                    package = cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]").get()).strip()
+                    fields["name"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[2]/td[2]").get()).strip())
+                    fields["description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[8]/td[2]").get()).strip())
+                    package = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]").get()).strip())
                     fields["link"] = response.url
 
                 break
@@ -144,15 +148,16 @@ def main():
                 print("Invalid part number!")
         
         # print the fields
-        print("Part name: " + fields["name"])
-        print("Part description: " + fields["description"])
-        print("Part link: " + fields["link"])
-        print("Part package: " + package)
-        infoDict = utils.parseComponent(fields["description"])
-        print("Part info: " + str(infoDict))
+        # print("Part name: " + fields["name"])
+        # print("Part description: " + fields["description"])
+        # print("Part link: " + fields["link"])
+        # print("Part package: " + package)
 
         # construct template using: <value> <package> <voltage rating (for capacitors)>/<power rating (for resistors)>/<curent>
         # in one line we check if this is a resistor or a capacitor, we check it depending on if res_value or cap_value keys are present in the infoDict
+
+        infoDict = utils.parseComponent(fields["description"])
+        #print("Part info: " + str(infoDict))
 
         if "res_value" in infoDict and "ind_value" not in infoDict:
             template = infoDict["res_value"] + " " + package + " " + infoDict["power_value"]
@@ -165,9 +170,78 @@ def main():
         
         print("Confirm/enter the template: ")
         template = utils.input_with_prefill(text=template, prompt="")
+        
+        # filter all the parts that have .is_template = True
+        templates = list(filter(lambda x: x.is_template, parts))
+        # find templates with close names to the template we want to create
+        partTemplate = None
+        try:
+            partTemplate = get_close_matches(template, [i.name for i in templates], n=1, cutoff=0.8)[0]
+            # now get the part object that has the same name as the template
+            partTemplate = list(filter(lambda x: x.name == partTemplate, templates))[0]
+        except IndexError:
+            pass
+        
+        os.system(clr)
 
-        print(f"template: {template}")
+        if not partTemplate:
+            print("No existing template found, would you like to create one? (y/n)")
+            if input() == "y":
+                print("Creating new template...")
+                category = list(filter(lambda x: x.name == category_name, categories))[0]
+                location = list(filter(lambda x: x.name == location_name, locations))[0]
+                args = {
+                    'name': template,
+                    'description': fields['description'],
+                    'category': category.pk,
+                    'default_location': location.pk,
+                    'component': True,
+                    'is_template': True
+                }
 
+                print("Would you like to provide additional information? (y/n)")
+                if input() == "y":
+                    print("Please enter the image link (enter to skip):")
+                    inp = input()
+                    if inp != "":
+                        args['remote_image'] = inp
+                    print("Please enter the minimum stock value:")
+                    inp = input()
+                    if inp != "":                    
+                        args['minimum_stock'] = int(inp)
+                    print("Please enter the note:")
+                    inp = input()
+                    if inp != "":
+                        args['note'] = inp
+                    print("Please enter the link:")
+                    inp = input()
+                    if inp != "":
+                        args['link'] = inp
+
+                os.system(clr)
+
+                #print(f"name: {args['name']}\ndescription: {args['description']}\ncategory: {[elem for elem in categories if elem.pk == args['category']][0].name}\ndefault_location: {[elem for elem in locations if elem.pk == args['default_location']][0].name}\ncomponent: {args['component']}\nis_template: {args['is_template']}")
+                # print the dict in a nice format
+                print("Template information:")  
+                for key, value in args.items():
+                    if key == "category":
+                        value = [elem for elem in categories if elem.pk == value][0].name
+                    elif key == "default_location":
+                        value = [elem for elem in locations if elem.pk == value][0].name
+                    print(f"{key}: {value}")
+
+
+
+                print("Confirm template information? (y/n)")
+                if input() == "y":
+                    templateObj = Part.create(api, args)
+                    print("Template created!")
+        else:
+            print(f"Found existing template called {partTemplate.name}, use this to create the new part? (y/n)")
+            if input() == "y":
+                print("Creating new part...")
+                #part = StockItem.create(api, name=fields["name"], category=category_name, description=fields["description"], link=fields["link"], template=partTemplate)
+                print("Part created!")
         #items = StockItem.list(api, location=1, part=1)
         # for i in parts:
         #     print(i.name)
