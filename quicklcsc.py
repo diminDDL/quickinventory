@@ -130,6 +130,7 @@ def main():
             # fields["name"] = ""           p
             # fields["description"] = ""    p
             # fields["link"] = ""           p
+            # fields["template_description"] = "" p
             # fields["location"] = ""
             # fields["supplier"] = ""       
             # fields["variant"] = ""
@@ -140,6 +141,7 @@ def main():
                     sel = Selector(response.text)
                     fields["name"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[2]/td[2]").get()).strip())
                     fields["description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[8]/td[2]").get()).strip())
+                    fields["template_description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[1]/ul/li[7]/a").get()).strip())
                     package = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]").get()).strip())
                     fields["link"] = response.url
 
@@ -174,74 +176,71 @@ def main():
         # filter all the parts that have .is_template = True
         templates = list(filter(lambda x: x.is_template, parts))
         # find templates with close names to the template we want to create
-        partTemplate = None
-        try:
-            partTemplate = get_close_matches(template, [i.name for i in templates], n=1, cutoff=0.8)[0]
-            # now get the part object that has the same name as the template
-            partTemplate = list(filter(lambda x: x.name == partTemplate, templates))[0]
-        except IndexError:
-            pass
+        partTemplate = utils.findPartTemplate(template, templates)
         
         os.system(clr)
+
+        newTemplate = False
 
         if not partTemplate:
             print("No existing template found, would you like to create one? (y/n)")
             if input() == "y":
-                print("Creating new template...")
-                category = list(filter(lambda x: x.name == category_name, categories))[0]
-                location = list(filter(lambda x: x.name == location_name, locations))[0]
-                args = {
-                    'name': template,
-                    'description': fields['description'],
-                    'category': category.pk,
-                    'default_location': location.pk,
-                    'component': True,
-                    'is_template': True
-                }
-
-                print("Would you like to provide additional information? (y/n)")
-                if input() == "y":
-                    print("Please enter the image link (enter to skip):")
-                    inp = input()
-                    if inp != "":
-                        args['remote_image'] = inp
-                    print("Please enter the minimum stock value:")
-                    inp = input()
-                    if inp != "":                    
-                        args['minimum_stock'] = int(inp)
-                    print("Please enter the note:")
-                    inp = input()
-                    if inp != "":
-                        args['note'] = inp
-                    print("Please enter the link:")
-                    inp = input()
-                    if inp != "":
-                        args['link'] = inp
-
-                os.system(clr)
-
-                #print(f"name: {args['name']}\ndescription: {args['description']}\ncategory: {[elem for elem in categories if elem.pk == args['category']][0].name}\ndefault_location: {[elem for elem in locations if elem.pk == args['default_location']][0].name}\ncomponent: {args['component']}\nis_template: {args['is_template']}")
-                # print the dict in a nice format
-                print("Template information:")  
-                for key, value in args.items():
-                    if key == "category":
-                        value = [elem for elem in categories if elem.pk == value][0].name
-                    elif key == "default_location":
-                        value = [elem for elem in locations if elem.pk == value][0].name
-                    print(f"{key}: {value}")
-
-
-
-                print("Confirm template information? (y/n)")
-                if input() == "y":
-                    templateObj = Part.create(api, args)
-                    print("Template created!")
+                newTemplate = True
         else:
-            print(f"Found existing template called {partTemplate.name}, use this to create the new part? (y/n)")
+            print(f"Found existing template called {partTemplate.name}, use this to create the new part?\ny - use this to create the part / n - create new template")
             if input() == "y":
-                print("Creating new part...")
-                #part = StockItem.create(api, name=fields["name"], category=category_name, description=fields["description"], link=fields["link"], template=partTemplate)
-                print("Part created!")
+                newTemplate = False
+            else:
+                newTemplate = True
+        
+        if newTemplate:
+            print("Creating new template...")
+            category = list(filter(lambda x: x.name == category_name, categories))[0]
+            location = list(filter(lambda x: x.name == location_name, locations))[0]
+            args = {
+                'name': template,
+                'description': fields["template_description"],
+                'category': category.pk,
+                'default_location': location.pk,
+                'component': True,
+                'is_template': True
+            }
+            print("Would you like to provide additional information? (y/n)")
+            if input() == "y":
+                print("Please enter the image link (enter to skip):")
+                inp = input()
+                if inp != "":
+                    args['remote_image'] = inp
+                print("Please enter the minimum stock value (enter to skip):")
+                inp = input()
+                if inp != "":                    
+                    args['minimum_stock'] = int(inp)
+                print("Please enter the note (enter to skip):")
+                inp = input()
+                if inp != "":
+                    args['note'] = inp
+                print("Please enter the link (enter to skip):")
+                inp = input()
+                if inp != "":
+                    args['link'] = inp
+            os.system(clr)
+            # print the dict in a nice format
+            print("Template information:")  
+            for key, value in args.items():
+                if key == "category":
+                    value = [elem for elem in categories if elem.pk == value][0].name
+                elif key == "default_location":
+                    value = [elem for elem in locations if elem.pk == value][0].name
+                print(f"{key}: {value}")
+            print("Confirm template information? (y/n)")
+            if input() == "y":
+                templateObj = Part.create(api, args)
+                print("Template created!")
+        
+        print("Creating new part...")
+        #part = StockItem.create(api, name=fields["name"], category=category_name, description=fields["description"], link=fields["link"], template=partTemplate)
+        print("Part created!")
+        
         #items = StockItem.list(api, location=1, part=1)
         # for i in parts:
         #     print(i.name)

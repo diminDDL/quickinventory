@@ -1,5 +1,5 @@
 import readline
-
+from difflib import get_close_matches
 
 class utils():
     def __init__(self):
@@ -67,3 +67,12 @@ class utils():
         result = input(prompt)
         readline.set_pre_input_hook()
         return result
+    
+    def findPartTemplate(self, template, templates):
+        try:
+            partTemplate = get_close_matches(template, [i.name for i in templates], n=1, cutoff=0.5)[0]
+            # now get the part object that has the same name as the template
+            partTemplate = list(filter(lambda x: x.name == partTemplate, templates))[0]
+        except IndexError:
+            partTemplate = None
+        return partTemplate
