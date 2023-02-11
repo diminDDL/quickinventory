@@ -42,7 +42,6 @@ def main():
     if cam == "y":
         print("Starting camera...")
         import cv2
-        camera = cv2.VideoCapture(0)
     try:
         # figure out what os we are running on
         if os.name == "nt":
@@ -132,15 +131,21 @@ def main():
 
             while True:
                 lcscPart = ""
+                part = ""
                 if cam == "y":
+                    camera = cv2.VideoCapture(0)
                     ret, frame = camera.read()
+                    print("Press ESC to exit the camera.")
                     while ret:
                         ret, frame = camera.read()
                         frame, part = utils.read_barcodes(frame)
                         cv2.imshow('Barcode/QR code reader', frame)
                         if cv2.waitKey(1) & 0xFF == 27 or part.startswith("C"):
+                            cv2.destroyAllWindows()
+                            lcscPart = input("Please enter the LCSC part number: ")
                             break
                     cv2.destroyAllWindows()
+                    camera.release()
                     lcscPart = part
                 else:
                     lcscPart = input("Please enter the LCSC part number: ")
@@ -345,7 +350,6 @@ def main():
             print("Part added to stock!")
     except KeyboardInterrupt:
         print ("Shutdown requested...exiting")
-        camera.release()
     except Exception:
         traceback.print_exc(file=sys.stdout)
     sys.exit(0)
