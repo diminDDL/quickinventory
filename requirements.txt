@@ -3,3 +3,5 @@ inventree
 anytree
 requests
 parsel
+pyzbar
+opencv-python

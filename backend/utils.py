@@ -1,4 +1,7 @@
 import readline
+import cv2
+import re
+from pyzbar import pyzbar
 from difflib import get_close_matches
 
 class utils():
@@ -70,9 +73,26 @@ class utils():
     
     def findPartTemplate(self, template, templates):
         try:
-            partTemplate = get_close_matches(template, [i.name for i in templates], n=1, cutoff=0.5)[0]
+            partTemplate = get_close_matches(template, [i.name for i in templates], n=1, cutoff=0.85)[0]
             # now get the part object that has the same name as the template
             partTemplate = list(filter(lambda x: x.name == partTemplate, templates))[0]
         except IndexError:
             partTemplate = None
         return partTemplate
+    
+    def read_barcodes(self, frame):
+        LCSCPartNumber = ""
+        barcodes = pyzbar.decode(frame)
+        for barcode in barcodes:
+            x, y , w, h = barcode.rect
+            barcode_info = barcode.data.decode('utf-8')
+            cv2.rectangle(frame, (x, y),(x+w, y+h), (0, 255, 0), 2)
+    
+            font = cv2.FONT_HERSHEY_DUPLEX
+            cv2.putText(frame, barcode_info, (x + 6, y - 6), font, 2.0, (255, 255, 255), 1)        #3
+            if barcode_info.startswith('{') and barcode_info.endswith('}'):
+                print(f"Recognized QR code: {barcode_info}")
+                LCSCPartNumber = re.search('pc:(C\d*)', barcode_info)
+                LCSCPartNumber = str(LCSCPartNumber.group(1)).strip()
+                print(f"Extracted part number: {LCSCPartNumber}")
+        return frame, LCSCPartNumber
