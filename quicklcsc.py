@@ -12,8 +12,9 @@ import os
 import sys, traceback
 import requests
 import re
-import backend.utils
+import backend.utilities
 import html
+import backend.lcsc
 from difflib import get_close_matches
 from anytree import Node, RenderTree, search
 from inventree.api import InvenTreeAPI
@@ -23,50 +24,25 @@ from inventree.stock import StockLocation, StockItem
 from backend.file import fileHandler
 from parsel import Selector
 
-
-CLEANR = re.compile('<.*?>')
-
-def cleanhtml(raw_html):
-  cleantext = str(html.unescape(re.sub(CLEANR, '', raw_html)))
-  return cleantext
-
-CLEAN_NUMERIC = re.compile('[^0-9.,]')
-
-def cleanNumeric(raw_text):
-    cleantext = re.sub(CLEAN_NUMERIC, '', raw_text)
-    return cleantext
-
 def main():
+    # figure out what os we are running on
+    clr = "cls" if os.name == "nt" else "clear"
+
     print("Would you like to use a camera? (y/n)")
-    cam = input()
+    cam = input().lower()
     if cam == "y":
         print("Starting camera...")
         import cv2
     try:
-        # figure out what os we are running on
-        if os.name == "nt":
-            clr = "cls"
-        else:
-            clr = "clear"
         os.system(clr)
-
-        def drawTree(tree_root):
-            tree_ids = []
-            i = 0
-            size = len(list(RenderTree(tree_root)))
-            padding = len(str(size))
-            for pre, fill, node in RenderTree(tree_root):
-                tree_ids.append([[i], [node.name]])
-                padded = str(i).rjust(padding)
-                print(f"{padded}) {pre}{node.name}")
-                i += 1
-            return tree_ids
         
         fs = fileHandler("config.toml")
         data = fs.readCredentials()
         server_url = "http://" + data["server"]["ip"]
         token = data["server"]["token"]
-        utils = backend.utils.utils()
+        utils = backend.utilities.Tools()
+        lcsc = backend.lcsc.LCSC(utils=utils)
+
         print("Connecting to InvenTree...")
         api = InvenTreeAPI(server_url, token=token)
 
@@ -95,7 +71,7 @@ def main():
 
 
         while True:
-    
+            os.system(clr)
             while True:
                 lcscPart = ""
                 part = ""
@@ -107,7 +83,8 @@ def main():
                         ret, frame = camera.read()
                         frame, part = utils.read_barcodes(frame)
                         cv2.imshow('Barcode/QR code reader', frame)
-                        if cv2.waitKey(1) & 0xFF == 27 or part.startswith("C"):
+                        if cv2.waitKey(1) & 0xFF == 27 or part != ["", None]:
+                            part = part[1]
                             cv2.destroyAllWindows()
                             if not part.startswith("C"):
                                 part = input("Please enter the LCSC part number: ")
@@ -117,61 +94,16 @@ def main():
                     lcscPart = part
                 else:
                     lcscPart = input("Please enter the LCSC part number: ")
-                query = "https://www.lcsc.com/search?q=" + lcscPart
-                print('Querying LCSC...: "' + query + '"')
-                response = requests.get(query)
-                fields = {}
-                package = ""
-                # fields["category"] = ""
-                # fields["name"] = ""           p
-                # fields["description"] = ""    p
-                # fields["link"] = ""           p
-                # fields["template_description"] = "" p
-                # fields["location"] = ""
-                # fields["supplier"] = ""       
-                # fields["variant"] = ""
-                # fields["unit_price"] = ""    p
-                try:
-                    if response.status_code == 200:
-                        print("Query successful!")
-                        print("Parsing data...")
-                        sel = Selector(response.text)
-                        fields["name"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[2]/td[2]").get()).strip())
-                        print("Name: " + fields["name"])
-                        try:
-                            fields["description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[8]/td[2]").get()).strip())
-                        except:
-                            fields["description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[7]/td[2]").get()).strip())
-                        print("Description: " + fields["description"])
-                        fields["template_description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[1]/ul/li[7]/a").get()).strip())
-                        print("Template description: " + fields["template_description"])
-                        package = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]").get()).strip())
-                        print("Package: " + package)
-                        fields["link"] = response.url
-                        print("Link: " + fields["link"])
-                        # check if part is discontinued beofore getting the price
-                        try:
-                            fields["unit_price"] = re.sub(' +', ' ', cleanNumeric(cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[2]/div[1]/div[4]/table/tbody/tr[1]/td[2]/span").get())).strip())
-                        except:
-                            print("Part is discontinued!")
-                            fields["unit_price"] = "0"
-                    break
-                except Exception as e:
-                    # print(e)
-                    # check if 
-                    print("Invalid part number!")
-            
-            
-            # print(len(parts))
-            # print(len(categories))
-            # print(categories[2].name)
-            # print(categories[2].getParentCategory())
-            # print(categories[0].getChildCategories())
+                
+                print("Querying LCSC...")
+                fields, package = lcsc.query(lcscPart)
+                print("Parased:" + fields["link"])
+                break
 
            # os.system(clr)
             while True:
                 try:
-                    category_ids = drawTree(category_tree_root)
+                    category_ids = utils.drawTree(category_tree_root)
                     print("Please select the category for the new part:")
                     category_id = int(input())
                     category_name = category_ids[category_id][1][0]
@@ -184,7 +116,7 @@ def main():
 
             while True:
                 try:
-                    location_tree_ids = drawTree(location_tree_root)
+                    location_tree_ids = utils.drawTree(location_tree_root)
                     print("Please select the location for the new part:")
                     location_id = int(input())
                     location_name = location_tree_ids[location_id][1][0]

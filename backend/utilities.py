@@ -1,12 +1,37 @@
 import readline
 import cv2
 import re
+import html
+import backend.lcsc
 from pyzbar import pyzbar
+from anytree import Node, RenderTree, search
 from difflib import get_close_matches
 
-class utils():
+class Tools():
     def __init__(self):
-        pass
+        self.lcsc = backend.lcsc.LCSC(utils=self)
+        self.CLEANR = re.compile('<.*?>')
+        self.CLEAN_NUMERIC = re.compile('[^0-9.,]')
+
+    def cleanhtml(self, raw_html):
+        cleantext = str(html.unescape(re.sub(self.CLEANR, '', raw_html)))
+        return cleantext
+
+    def cleanNumeric(self, raw_text):
+        cleantext = re.sub(self.CLEAN_NUMERIC, '', raw_text)
+        return cleantext
+
+    def drawTree(self, tree_root):
+        tree_ids = []
+        i = 0
+        size = len(list(RenderTree(tree_root)))
+        padding = len(str(size))
+        for pre, fill, node in RenderTree(tree_root):
+            tree_ids.append([[i], [node.name]])
+            padded = str(i).rjust(padding)
+            print(f"{padded}) {pre}{node.name}")
+            i += 1
+        return tree_ids
 
     def parseComponent(self, str):
         # parses the string and returns the following
@@ -81,7 +106,9 @@ class utils():
         return partTemplate
     
     def read_barcodes(self, frame):
-        LCSCPartNumber = ""
+        # returns the frame and the name of the company and the part number
+        # for example, ["LCSC", "C123456789"] or ["Digikey", "123-456-ABC"] and so on
+        part = ["", None]
         barcodes = pyzbar.decode(frame)
         for barcode in barcodes:
             x, y , w, h = barcode.rect
@@ -91,8 +118,7 @@ class utils():
             font = cv2.FONT_HERSHEY_DUPLEX
             cv2.putText(frame, barcode_info, (x + 6, y - 6), font, 2.0, (255, 255, 255), 1)        #3
             if barcode_info.startswith('{') and barcode_info.endswith('}'):
-                print(f"Recognized QR code: {barcode_info}")
-                LCSCPartNumber = re.search('pc:(C\d*)', barcode_info)
-                LCSCPartNumber = str(LCSCPartNumber.group(1)).strip()
-                print(f"Extracted part number: {LCSCPartNumber}")
-        return frame, LCSCPartNumber
+                # print(f"Recognized QR code: {barcode_info}")
+                part = self.lcsc.decodeCode(barcode_info)
+                print(f"Extracted part number: {part}")
+        return frame, part
