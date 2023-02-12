@@ -27,7 +27,7 @@ from parsel import Selector
 CLEANR = re.compile('<.*?>')
 
 def cleanhtml(raw_html):
-  cleantext = html.unescape(re.sub(CLEANR, '', raw_html))
+  cleantext = str(html.unescape(re.sub(CLEANR, '', raw_html)))
   return cleantext
 
 CLEAN_NUMERIC = re.compile('[^0-9.,]')
@@ -53,9 +53,12 @@ def main():
         def drawTree(tree_root):
             tree_ids = []
             i = 0
+            size = len(list(RenderTree(tree_root)))
+            padding = len(str(size))
             for pre, fill, node in RenderTree(tree_root):
                 tree_ids.append([[i], [node.name]])
-                print(f"{i}) {pre}{node.name}")
+                padded = str(i).rjust(padding)
+                print(f"{padded}) {pre}{node.name}")
                 i += 1
             return tree_ids
         
@@ -67,68 +70,32 @@ def main():
         print("Connecting to InvenTree...")
         api = InvenTreeAPI(server_url, token=token)
 
+        categories = PartCategory.list(api)
+        # iterate over all categories and create a hierarchical tree
+        print("Creating category tree...")
+        category_tree_root = Node("root")
+        for i in categories:
+            if i.getParentCategory() == None:
+                Node(i.name, parent=category_tree_root)
+            else:
+                # find the parent category in the tree
+                res = search.findall(category_tree_root, filter_=lambda node: node.name in str(i.getParentCategory().name), maxcount=1)[0]
+                Node(i.name, parent=res)
+
+        locations = StockLocation.list(api)
+        print("Creating location tree...")
+        location_tree_root = Node("root")
+        for i in locations:
+            if i.getParentLocation() == None:
+                Node(i.name, parent=location_tree_root)
+            else:
+                # find the parent category in the tree
+                res = search.findall(location_tree_root, filter_=lambda node: node.name in str(i.getParentLocation().name), maxcount=1)[0]
+                Node(i.name, parent=res)
+
+
         while True:
     
-            parts = Part.list(api)
-            categories = PartCategory.list(api)
-            locations = StockLocation.list(api)
-            # print(len(parts))
-            # print(len(categories))
-            # print(categories[2].name)
-            # print(categories[2].getParentCategory())
-            # print(categories[0].getChildCategories())
-
-            # iterate over all categories and create a hierarchical tree
-            print("Creating category tree...")
-            os.system(clr)
-            category_tree_root = Node("root")
-            for i in categories:
-                if i.getParentCategory() == None:
-                    Node(i.name, parent=category_tree_root)
-                else:
-                    # find the parent category in the tree
-                    res = search.findall(category_tree_root, filter_=lambda node: node.name in str(i.getParentCategory().name), maxcount=1)[0]
-                    Node(i.name, parent=res)
-
-            while True:
-                try:
-                    category_ids = drawTree(category_tree_root)
-                    print("Please select the category for the new part:")
-                    category_id = int(input())
-                    category_name = category_ids[category_id][1][0]
-                    break
-                except (ValueError, IndexError):
-                    os.system(clr)
-                    print("Please enter a valid number!")
-
-            os.system(clr)
-
-            print("Creating location tree...")
-            location_tree_root = Node("root")
-            for i in locations:
-                if i.getParentLocation() == None:
-                    Node(i.name, parent=location_tree_root)
-                else:
-                    # find the parent category in the tree
-                    res = search.findall(location_tree_root, filter_=lambda node: node.name in str(i.getParentLocation().name), maxcount=1)[0]
-                    Node(i.name, parent=res)
-
-            while True:
-                try:
-                    location_tree_ids = drawTree(location_tree_root)
-                    print("Please select the location for the new part:")
-                    location_id = int(input())
-                    location_name = location_tree_ids[location_id][1][0]
-                    break
-                except(ValueError, IndexError):
-                    os.system(clr)
-                    print("Please enter a valid number!")
-
-            os.system(clr)
-
-            print("Selected category: " + category_name)
-            print("Selected location: " + location_name)
-
             while True:
                 lcscPart = ""
                 part = ""
@@ -142,7 +109,8 @@ def main():
                         cv2.imshow('Barcode/QR code reader', frame)
                         if cv2.waitKey(1) & 0xFF == 27 or part.startswith("C"):
                             cv2.destroyAllWindows()
-                            lcscPart = input("Please enter the LCSC part number: ")
+                            if not part.startswith("C"):
+                                part = input("Please enter the LCSC part number: ")
                             break
                     cv2.destroyAllWindows()
                     camera.release()
@@ -169,10 +137,18 @@ def main():
                         print("Parsing data...")
                         sel = Selector(response.text)
                         fields["name"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[2]/td[2]").get()).strip())
-                        fields["description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[8]/td[2]").get()).strip())
+                        print("Name: " + fields["name"])
+                        try:
+                            fields["description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[8]/td[2]").get()).strip())
+                        except:
+                            fields["description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[7]/td[2]").get()).strip())
+                        print("Description: " + fields["description"])
                         fields["template_description"] = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[1]/ul/li[7]/a").get()).strip())
+                        print("Template description: " + fields["template_description"])
                         package = re.sub(' +', ' ', cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]").get()).strip())
+                        print("Package: " + package)
                         fields["link"] = response.url
+                        print("Link: " + fields["link"])
                         # check if part is discontinued beofore getting the price
                         try:
                             fields["unit_price"] = re.sub(' +', ' ', cleanNumeric(cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[2]/div[1]/div[4]/table/tbody/tr[1]/td[2]/span").get())).strip())
@@ -180,9 +156,48 @@ def main():
                             print("Part is discontinued!")
                             fields["unit_price"] = "0"
                     break
-                except TypeError:
+                except Exception as e:
+                    # print(e)
                     # check if 
                     print("Invalid part number!")
+            
+            
+            # print(len(parts))
+            # print(len(categories))
+            # print(categories[2].name)
+            # print(categories[2].getParentCategory())
+            # print(categories[0].getChildCategories())
+
+           # os.system(clr)
+            while True:
+                try:
+                    category_ids = drawTree(category_tree_root)
+                    print("Please select the category for the new part:")
+                    category_id = int(input())
+                    category_name = category_ids[category_id][1][0]
+                    break
+                except (ValueError, IndexError):
+                    os.system(clr)
+                    print("Please enter a valid number!")
+
+            os.system(clr)
+
+            while True:
+                try:
+                    location_tree_ids = drawTree(location_tree_root)
+                    print("Please select the location for the new part:")
+                    location_id = int(input())
+                    location_name = location_tree_ids[location_id][1][0]
+                    break
+                except(ValueError, IndexError):
+                    os.system(clr)
+                    print("Please enter a valid number!")
+
+            os.system(clr)
+
+            print("Selected category: " + category_name)
+            print("Selected location: " + location_name)
+
 
             # print the fields
             # print("Part name: " + fields["name"])
@@ -212,6 +227,7 @@ def main():
             print("Confirm/enter the template: ")
             template = utils.input_with_prefill(text=template, prompt="")
 
+            parts = Part.list(api)
             # filter all the parts that have .is_template = True
             templates = list(filter(lambda x: x.is_template, parts))
             # find templates with close names to the template we want to create
