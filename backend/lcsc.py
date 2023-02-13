@@ -37,6 +37,7 @@ class LCSC():
                     fields["description"] = re.sub(' +', ' ', self.utils.cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[7]/td[2]").get()).strip())
                 fields["template_description"] = re.sub(' +', ' ', self.utils.cleanhtml(sel.xpath("/html/body/div/div/div/div/main/div/div/div[1]/ul/li[7]/a").get()).strip())
                 package = re.sub(' +', ' ', self.utils.cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div[2]/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]").get()).strip())
+                fields["remote_image"] = re.sub(' +', ' ', sel.css('div.v-card:nth-child(1) > img:nth-child(1)').attrib['src'])
                 fields["link"] = response.url
                 # check if part is discontinued beofore getting the price
                 try:

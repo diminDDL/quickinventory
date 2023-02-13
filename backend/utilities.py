@@ -13,15 +13,15 @@ class Tools():
         self.CLEANR = re.compile('<.*?>')
         self.CLEAN_NUMERIC = re.compile('[^0-9.,]')
 
-    def cleanhtml(self, raw_html):
+    def cleanhtml(self, raw_html) -> str:
         cleantext = str(html.unescape(re.sub(self.CLEANR, '', raw_html)))
         return cleantext
 
-    def cleanNumeric(self, raw_text):
+    def cleanNumeric(self, raw_text) -> str:
         cleantext = re.sub(self.CLEAN_NUMERIC, '', raw_text)
         return cleantext
 
-    def drawTree(self, tree_root, typ: list):
+    def drawTree(self, tree_root, typ: list) -> list:
         tree_ids = []
         i = 0
         size = len(list(RenderTree(tree_root)))
@@ -40,7 +40,7 @@ class Tools():
             i += 1
         return tree_ids
 
-    def parseComponent(self, str):
+    def parseComponent(self, str) -> list:
         # parses the string and returns the following
         # component value
         # component package
@@ -94,7 +94,7 @@ class Tools():
             ret["amp_value"] = amp_value
         return ret
     
-    def input_with_prefill(self, prompt, text):
+    def input_with_prefill(self, prompt, text) -> str:
         def hook():
             readline.insert_text(text)
             readline.redisplay()

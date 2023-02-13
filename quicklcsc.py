@@ -176,7 +176,7 @@ def main():
                 if input() == "y":
                     newTemplate = True
             else:
-                print(f"Found existing template called:\n{partTemplate.name}\nThe current template is:\n{template}.\nUse the existing tempalte to create the new part?\ny - use existing to create the part / n - create new template")
+                print(f"Found existing template called:\n{partTemplate.name}\nThe current template is:\n{template}\nUse the existing tempalte to create the new part?\ny - use existing to create the part / n - create new template")
                 if input() == "y":
                     newTemplate = False
                 else:
@@ -220,7 +220,6 @@ def main():
                     elif key == "default_location":
                         value = [elem for elem in locations if elem.pk == value][0].name
                     print(f"{key}: {value}")
-                print(args)
                 print("Confirm template information? (y/n)")
                 if input() == "y":
                     templateObj = Part.create(api, args)
@@ -234,6 +233,7 @@ def main():
                 'name': fields["name"],
                 'description': fields["description"],
                 'link': fields["link"],
+                'remote_image': fields["remote_image"],
                 'category': category_pk,
                 'default_location': location_pk,
                 'keywords' : lcscPart,
