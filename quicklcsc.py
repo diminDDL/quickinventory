@@ -51,27 +51,28 @@ def main():
         print("Creating category tree...")
         category_tree_root = Node("root")
         for i in categories:
-            if i.getParentCategory() == None:
-                Node(i.name, parent=category_tree_root)
+            parent = i.getParentCategory()
+            if parent == None:
+                Node(i.pk, parent=category_tree_root)
             else:
                 # find the parent category in the tree
-                res = search.findall(category_tree_root, filter_=lambda node: node.name in str(i.getParentCategory().name), maxcount=1)[0]
-                Node(i.name, parent=res)
+                res = search.findall(category_tree_root, filter_=lambda node: str(node.name) == str(parent.pk), maxcount=1)[0]
+                Node(i.pk, parent=res)
 
         locations = StockLocation.list(api)
         print("Creating location tree...")
         location_tree_root = Node("root")
         for i in locations:
-            if i.getParentLocation() == None:
-                Node(i.name, parent=location_tree_root)
+            parent = i.getParentLocation()
+            if parent == None:
+                Node(i.pk, parent=location_tree_root)
             else:
                 # find the parent category in the tree
-                res = search.findall(location_tree_root, filter_=lambda node: node.name in str(i.getParentLocation().name), maxcount=1)[0]
-                Node(i.name, parent=res)
-
+                res = search.findall(location_tree_root, filter_=lambda node: str(node.name) == str(parent.pk), maxcount=1)[0]
+                Node(i.pk, parent=res)
 
         while True:
-            os.system(clr)
+            #os.system(clr)
             while True:
                 lcscPart = ""
                 part = ""
@@ -103,10 +104,10 @@ def main():
            # os.system(clr)
             while True:
                 try:
-                    category_ids = utils.drawTree(category_tree_root)
+                    category_ids = utils.drawTree(category_tree_root, categories)
                     print("Please select the category for the new part:")
-                    category_id = int(input())
-                    category_name = category_ids[category_id][1][0]
+                    category_pk = category_ids[int(input())][1][0]
+                    category_name = [i.name if category_pk == i.pk else None for i in categories if i.pk == category_pk][0]
                     break
                 except (ValueError, IndexError):
                     os.system(clr)
@@ -116,10 +117,11 @@ def main():
 
             while True:
                 try:
-                    location_tree_ids = utils.drawTree(location_tree_root)
+                    location_tree_ids = utils.drawTree(location_tree_root, locations)
                     print("Please select the location for the new part:")
-                    location_id = int(input())
-                    location_name = location_tree_ids[location_id][1][0]
+                    location_pk = location_tree_ids[int(input())][1][0]
+                    location_name = [i.name if location_pk == i.pk else None for i in locations if i.pk == location_pk][0]
+                    print(f"Selected location: {location_name}, location pk: {location_pk}")
                     break
                 except(ValueError, IndexError):
                     os.system(clr)
@@ -127,8 +129,8 @@ def main():
 
             os.system(clr)
 
-            print("Selected category: " + category_name)
-            print("Selected location: " + location_name)
+            print("Selected category: " + category_name + " (pk: " + str(category_pk) + ")")
+            print("Selected location: " + location_name + " (pk: " + str(location_pk) + ")")
 
 
             # print the fields
@@ -183,13 +185,11 @@ def main():
             templateObj = None
             if newTemplate:
                 print("Creating new template...")
-                category = list(filter(lambda x: x.name == category_name, categories))[0]
-                location = list(filter(lambda x: x.name == location_name, locations))[0]
                 args = {
                     'name': template,
                     'description': fields["template_description"],
-                    'category': category.pk,
-                    'default_location': location.pk,
+                    'category': category_pk,
+                    'default_location': location_pk,
                     'component': True,
                     'is_template': True
                 }
@@ -220,6 +220,7 @@ def main():
                     elif key == "default_location":
                         value = [elem for elem in locations if elem.pk == value][0].name
                     print(f"{key}: {value}")
+                print(args)
                 print("Confirm template information? (y/n)")
                 if input() == "y":
                     templateObj = Part.create(api, args)
@@ -228,15 +229,13 @@ def main():
             os.system(clr)
             print("Creating new part...")
             print("Link to part: " + fields["link"])
-            category = list(filter(lambda x: x.name == category_name, categories))[0]
-            location = list(filter(lambda x: x.name == location_name, locations))[0]
             variant_of = partTemplate if not newTemplate else templateObj
             args = {
                 'name': fields["name"],
                 'description': fields["description"],
                 'link': fields["link"],
-                'category': category.pk,
-                'default_location': location.pk,
+                'category': category_pk,
+                'default_location': location_pk,
                 'keywords' : lcscPart,
                 'component': True,
                 'is_template': False
@@ -290,12 +289,13 @@ def main():
 
             stock = StockItem.create(api, {
                 'part': part.pk,
-                'location': location.pk,
+                'location': location_pk,
                 'quantity': quantity,
                 'purchase_price': round(float(price/quantity), 6)
             })
 
             print("Part added to stock!")
+            os.system(clr)
     except KeyboardInterrupt:
         print ("Shutdown requested...exiting")
     except Exception:

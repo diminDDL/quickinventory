@@ -21,7 +21,7 @@ class Tools():
         cleantext = re.sub(self.CLEAN_NUMERIC, '', raw_text)
         return cleantext
 
-    def drawTree(self, tree_root):
+    def drawTree(self, tree_root, typ: list):
         tree_ids = []
         i = 0
         size = len(list(RenderTree(tree_root)))
@@ -29,7 +29,14 @@ class Tools():
         for pre, fill, node in RenderTree(tree_root):
             tree_ids.append([[i], [node.name]])
             padded = str(i).rjust(padding)
-            print(f"{padded}) {pre}{node.name}")
+            name = ""
+            for j in typ:
+                if str(node.name) == str(j.pk):
+                    name = j.name
+                    break
+                else:
+                    name = node.name
+            print(f"{padded}) {pre}{name}")
             i += 1
         return tree_ids
 
