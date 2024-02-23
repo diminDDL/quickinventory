@@ -21,7 +21,7 @@ class Tools():
         cleantext = re.sub(self.CLEAN_NUMERIC, '', raw_text)
         return cleantext
 
-    def drawTree(self, tree_root, typ: list) -> list:
+    def drawTree(self, tree_root: Node, typ: list) -> list:
         tree_ids = []
         i = 0
         size = len(list(RenderTree(tree_root)))
