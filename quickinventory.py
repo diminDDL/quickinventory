@@ -99,12 +99,15 @@ def create_part(api: InvenTreeAPI, category_pk: int, location_pk: int, fields: t
         'name': fields["name"],
         'description': fields["description"],
         'link': fields["link"],
-        # 'remote_image': fields["remote_image"],  # Uncomment if remote_image is available
         'category': category_pk,
         'default_location': location_pk,
         'component': True,
         'is_template': False
     }
+    contains_remote_image = fields["remote_image"] != ""
+    if contains_remote_image:
+        args['remote_image'] = fields["remote_image"]
+
     # Additional logic for setting template, minimum stock, etc., as needed
     part = Part.create(api, args)
     print(f"Part created: {part.name} (pk: {part.pk})")
@@ -175,7 +178,7 @@ def main():
             category_pk = select_from_tree(category_tree_root, PartCategory.list(api))
             location_pk = select_from_tree(location_tree_root, StockLocation.list(api), tree_type="location")
             
-            #create_part(api, category_pk, location_pk, fields)
+            create_part(api, category_pk, location_pk, fields)
             # Add more functionality as needed
     except KeyboardInterrupt:
         print("Shutdown requested...exiting")
