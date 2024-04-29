@@ -2,6 +2,8 @@ import os
 import sys
 import traceback
 import cv2
+import requests
+from getpass import getpass
 from anytree import Node, RenderTree, search
 from inventree.api import InvenTreeAPI
 from inventree.part import PartCategory, Part
@@ -17,12 +19,32 @@ utils = Tools()
 def clear_screen() -> None:
     os.system("cls" if os.name == "nt" else "clear")
 
-def initialize_api() -> InvenTreeAPI:
+
+def get_new_token(server_url):
+    username = input("Enter username: ")
+    password = getpass("Enter password: ")
+    response = requests.get(f"{server_url}/api/user/token/", auth=(username, password))
+    if response.status_code == 200:
+        return response.json()['token']
+    else:
+        print("Failed to retrieve token.")
+        sys.exit(1)
+
+def initialize_api() -> 'InvenTreeAPI':
     fs = fileHandler("config.toml")
     data = fs.readCredentials()
     server_url = "http://" + data["server"]["ip"]
     token = data["server"]["token"]
     api = InvenTreeAPI(server_url, token=token)
+    # Check if the API is working
+    try:
+        PartCategory.list(api)
+    except Exception as e:
+        print(f"Failed to connect to the InvenTree server: {e}")
+        new_token = get_new_token(server_url)
+        fs.updateToken(new_token)
+        token = new_token
+        api = InvenTreeAPI(server_url, token=token)
     return api
 
 def build_category_tree(api: InvenTreeAPI) -> Node:
@@ -112,7 +134,7 @@ def create_part(api: InvenTreeAPI, category_pk: int, location_pk: int, fields: t
     part = Part.create(api, args)
     print(f"Part created: {part.name} (pk: {part.pk})")
 
-def handle_template_creation(api: InvenTreeAPI, category_pk: int, location_pk: int, fields: tuple, package: str) -> int:
+def handle_template_creation(api: InvenTreeAPI, category_pk: int, location_pk: int, fields: tuple, package: str, part_categories = None, part_locations = None) -> int:
     # First we generate a name for the template
     info = utils.parseComponent(fields["description"])
 
@@ -137,12 +159,13 @@ def handle_template_creation(api: InvenTreeAPI, category_pk: int, location_pk: i
     
     
     # Get a list of existing templates
-    templates = Part.list(api, {'is_template': True})
-    template_name = fields['name'] + " Template"  # Simplified template naming
-    existing_template = utils.findPartTemplate(template_name, templates)
+    templates = Part.list(api, is_template=True)
+    existing_template = utils.findPartTemplate(template, templates)
+
+    # clear_screen()
 
     if existing_template:
-        print(f"Existing template found: {existing_template.name}. Use this template? (y/n): ")
+        print(f"Existing template found: {existing_template.name}. The name you entered: {template}.\nUse this template? (y/n): ")
         use_existing = input().lower() == 'y'
     else:
         print("No existing template found. Create a new one? (y/n): ")
@@ -153,10 +176,47 @@ def handle_template_creation(api: InvenTreeAPI, category_pk: int, location_pk: i
     else:
         # Gather additional information for template creation here
         template_args = {
-            # Fill in arguments for template creation, including additional info prompts
+            'name': template,
+            'description': fields["template_description"],
+            'category': category_pk,
+            'default_location': location_pk,
+            'component': True,
+            'is_template': True
         }
-        template = Part.create(api, template_args)
-        template_pk = template.pk
+        print("Would you like to provide additional information? (y/n)")
+        additional_info = input().lower() == 'y'
+        if additional_info:
+            print("Please enter the image link (enter to skip):")
+            inp = input()
+            if inp != "":
+                template_args['remote_image'] = inp
+            print("Please enter the minimum stock value (enter to skip):")
+            inp = input()
+            if inp != "":                    
+                template_args['minimum_stock'] = int(inp)
+            print("Please enter the note (enter to skip):")
+            inp = input()
+            if inp != "":
+                template_args['note'] = inp
+            print("Please enter the link (enter to skip):")
+            inp = input()
+            if inp != "":
+                template_args['link'] = inp
+            
+        print("Template information:") 
+        for key, value in template_args.items():
+            if key == "category" and part_categories:
+                value = [elem for elem in part_categories if elem.pk == value][0].name
+            elif key == "default_location" and part_locations:
+                value = [elem for elem in part_locations if elem.pk == value][0].name
+            print(f"{key}: {value}")
+        print("Confirm template information? (y/n)")
+        # TODO, handle "n" properly
+        # can be done by making a function purely for editing a field in the template_args dict
+        # and asking the user if they want to edit a field
+        if input() == "y":
+            template = Part.create(api, template_args)
+            template_pk = template.pk
     return template_pk
 
 
@@ -175,8 +235,13 @@ def main():
         while True:
             # Get the LCSC part number
             fields, package = query_lcsc_part(lcsc, cam)
-            category_pk = select_from_tree(category_tree_root, PartCategory.list(api))
-            location_pk = select_from_tree(location_tree_root, StockLocation.list(api), tree_type="location")
+
+
+            part_categories = PartCategory.list(api)
+            part_locations = StockLocation.list(api)
+            category_pk = select_from_tree(category_tree_root, part_categories, tree_type="category")
+            location_pk = select_from_tree(location_tree_root, part_locations, tree_type="location")
+            template = handle_template_creation(api, category_pk, location_pk, fields, package, part_categories, part_locations)
             
             create_part(api, category_pk, location_pk, fields)
             # Add more functionality as needed

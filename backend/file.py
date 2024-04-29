@@ -1,13 +1,15 @@
 import toml
 import os
 
-class fileHandler():
+class fileHandler:
     def __init__(self, path):
         self.path = path
         self.emptyFile = """[server]
 ip = "1.1.1.1:1337" # IP and port of the server
-token = "token" # token of the user, created in admin panel"""
-        # if file does not exist, create it with default value
+token = "token" # token placeholder"""
+        self.check_file()
+
+    def check_file(self):
         if not os.path.isfile(self.path):
             print("File does not exist, creating it...")
             with open(self.path, "w") as f:
@@ -15,6 +17,11 @@ token = "token" # token of the user, created in admin panel"""
 
     def readCredentials(self):
         with open(self.path, 'r') as f:
-            # load the toml file
             data = toml.load(f)
         return data
+
+    def updateToken(self, new_token):
+        data = self.readCredentials()
+        data["server"]["token"] = new_token
+        with open(self.path, "w") as f:
+            toml.dump(data, f)
