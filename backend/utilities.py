@@ -51,7 +51,7 @@ class Tools():
         res_value = ""
         ind_end = ["mh", "uh", "μh", "nh", "ph"]
         ind_value = ""
-        volt_end = ["v", "mv", "uv", "vv"]
+        volt_end = ["v", "kv", "mv", "uv", "vv"]
         volt_value = ""
         amp_end = ["a", "ma", "ua"]
         amp_value = ""
