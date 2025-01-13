@@ -94,6 +94,23 @@ class Tools():
             ret["amp_value"] = amp_value
         return ret
     
+    def splitUnits(self, str):
+        # Splits given string into value (with SI scalar) and a unit
+        scalars = ["G", "M", "k", "m", "u", "μ", "n", "p"]
+    
+        for scalar in scalars:
+            divided_str = str.split(scalar)
+
+            if len(divided_str) == 2:
+                value = divided_str[0] + scalar
+                unit = divided_str[1]
+                break
+            elif len(divided_str) > 2:
+                print("Invalid input!")
+                break
+
+        return value, unit
+    
     def input_with_prefill(self, prompt, text) -> str:
         def hook():
             readline.insert_text(text)
