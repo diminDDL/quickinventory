@@ -108,7 +108,13 @@ class Tools():
             elif len(divided_str) > 2:
                 print("Invalid input!")
                 break
+        else:
+            value = str[:-1]
+            unit = str[-1:]
 
+        value = value.replace(" ", "")
+        unit = value.replace(" ", "")
+        
         return value, unit
     
     def input_with_prefill(self, prompt, text) -> str:
