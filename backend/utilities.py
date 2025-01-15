@@ -51,7 +51,7 @@ class Tools():
         res_value = ""
         ind_end = ["mh", "uh", "μh", "nh", "ph"]
         ind_value = ""
-        volt_end = ["v", "mv", "uv", "vv"]
+        volt_end = ["v", "kv", "mv", "uv", "vv"]
         volt_value = ""
         amp_end = ["a", "ma", "ua"]
         amp_value = ""
@@ -93,6 +93,35 @@ class Tools():
         if amp_value != "":
             ret["amp_value"] = amp_value
         return ret
+    
+    def splitUnits(self, str):
+        # Splits given string into value (with SI scalar) and a unit
+        scalars = ["G", "M", "k", "m", "u", "μ", "n", "p"]
+    
+        # Iterate through all scalars to split the string accordingly
+        for scalar in scalars:
+            divided_str = str.split(scalar)
+
+            if len(divided_str) == 2:  # For typical values e.g. 15uF, 27kohm
+                value = divided_str[0] + scalar
+                unit = divided_str[1]
+                break
+            elif len(divided_str) > 2:  # Unexpected format, handle error
+                print("Invalid input format! The string contains more than one scalar.")
+                return None, None
+        else:  # This is for values like 15R or 5F, where no scalar is found
+            if len(str) > 1:
+                value = str[:-1]  # All characters except the last
+                unit = str[-1:]  # Last character
+            else:
+                print("Invalid input format! The string is too short to have a value and unit.")
+                return None, None
+
+        # Clean up extra spaces from value and unit
+        value = value.replace(" ", "")
+        unit = unit.replace(" ", "")
+
+        return value, unit
     
     def input_with_prefill(self, prompt, text) -> str:
         def hook():

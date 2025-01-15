@@ -18,8 +18,8 @@ import backend.lcsc
 from difflib import get_close_matches
 from anytree import Node, RenderTree, search
 from inventree.api import InvenTreeAPI
-from inventree.part import PartCategory
-from inventree.part import Part
+from inventree.part import Part, PartCategory
+from inventree.part import Parameter, ParameterTemplate
 from inventree.stock import StockLocation, StockItem
 from backend.file import fileHandler
 from parsel import Selector
@@ -139,96 +139,170 @@ def main():
             # print("Part link: " + fields["link"])
             # print("Part package: " + package)
 
-            # construct template using: <value> <package> <voltage rating (for capacitors)>/<power rating (for resistors)>/<curent>
-            # in one line we check if this is a resistor or a capacitor, we check it depending on if res_value or cap_value keys are present in the infoDict
+            # Here the templates were used instead of the part parameters, which were introduced later. 
+            # For backward compatibility, they have been left here.
+            # You can choose which method you prefer.
+            use_templates = False
 
-            infoDict = utils.parseComponent(fields["description"])
-            #print("Part info: " + str(infoDict))
 
-            if "res_value" in infoDict and "ind_value" not in infoDict:
-                template = infoDict["res_value"] + " " + package + " " + (infoDict["power_value"] if "power_value" in infoDict else "")
-            elif "cap_value" in infoDict:
-                template = infoDict["cap_value"] + " " + package + " " + (infoDict["volt_value"] if "volt_value" in infoDict else "")
-            elif "ind_value" in infoDict:
-                template = infoDict["ind_value"] + " " + package + " " + (infoDict["amp_value"] if "amp_value" in infoDict else "")
-            else:
-                template = ""
+            if use_templates:
+                # construct template using: <value> <package> <voltage rating (for capacitors)>/<power rating (for resistors)>/<curent>
+                # in one line we check if this is a resistor or a capacitor, we check it depending on if res_value or cap_value keys are present in the infoDict
 
-            template = template.strip()
+                infoDict = utils.parseComponent(fields["description"])
+                #print("Part info: " + str(infoDict))
 
-            print("Part name: " + fields["name"])
-            print("Part link: " + fields["link"])
-            print("Confirm/enter the template: ")
-            template = utils.input_with_prefill(text=template, prompt="")
-
-            parts = Part.list(api)
-            # filter all the parts that have .is_template = True
-            templates = list(filter(lambda x: x.is_template, parts))
-            # find templates with close names to the template we want to create
-            partTemplate = utils.findPartTemplate(template, templates)
-
-            os.system(clr)
-
-            newTemplate = False
-
-            if not partTemplate:
-                print("No existing template found, would you like to create one? (y/n)")
-                if input() == "y":
-                    newTemplate = True
-            else:
-                print(f"Found existing template called:\n{partTemplate.name}\nThe current template is:\n{template}\nUse the existing tempalte to create the new part?\ny - use existing to create the part / n - create new template")
-                if input() == "y":
-                    newTemplate = False
+                if "res_value" in infoDict and "ind_value" not in infoDict:
+                    template = infoDict["res_value"] + " " + package + " " + (infoDict["power_value"] if "power_value" in infoDict else "")
+                elif "cap_value" in infoDict:
+                    template = infoDict["cap_value"] + " " + package + " " + (infoDict["volt_value"] if "volt_value" in infoDict else "")
+                elif "ind_value" in infoDict:
+                    template = infoDict["ind_value"] + " " + package + " " + (infoDict["amp_value"] if "amp_value" in infoDict else "")
                 else:
-                    newTemplate = True
+                    template = ""
 
-            templateObj = None
-            if newTemplate:
-                print("Creating new template...")
-                args = {
-                    'name': template,
-                    'description': fields["template_description"],
-                    'category': category_pk,
-                    'default_location': location_pk,
-                    'component': True,
-                    'is_template': True
-                }
-                print("Would you like to provide additional information? (y/n)")
-                if input() == "y":
-                    print("Please enter the image link (enter to skip):")
-                    inp = input()
-                    if inp != "":
-                        args['remote_image'] = inp
-                    print("Please enter the minimum stock value (enter to skip):")
-                    inp = input()
-                    if inp != "":                    
-                        args['minimum_stock'] = int(inp)
-                    print("Please enter the note (enter to skip):")
-                    inp = input()
-                    if inp != "":
-                        args['note'] = inp
-                    print("Please enter the link (enter to skip):")
-                    inp = input()
-                    if inp != "":
-                        args['link'] = inp
+                template = template.strip()
+
+                print("Part name: " + fields["name"])
+                print("Part link: " + fields["link"])
+                print("Confirm/enter the template: ")
+                template = utils.input_with_prefill(text=template, prompt="")
+
+                parts = Part.list(api)
+                # filter all the parts that have .is_template = True
+                templates = list(filter(lambda x: x.is_template, parts))
+                # find templates with close names to the template we want to create
+                partTemplate = utils.findPartTemplate(template, templates)
+
                 os.system(clr)
-                # print the dict in a nice format
-                print("Template information:")  
-                for key, value in args.items():
-                    if key == "category":
-                        value = [elem for elem in categories if elem.pk == value][0].name
-                    elif key == "default_location":
-                        value = [elem for elem in locations if elem.pk == value][0].name
-                    print(f"{key}: {value}")
-                print("Confirm template information? (y/n)")
-                if input() == "y":
-                    templateObj = Part.create(api, args)
-                    print("Template created!")
 
-            os.system(clr)
+                newTemplate = False
+
+                if not partTemplate:
+                    print("No existing template found, would you like to create one? (y/n)")
+                    if input() == "y":
+                        newTemplate = True
+                else:
+                    print(f"Found existing template called:\n{partTemplate.name}\nThe current template is:\n{template}\nUse the existing tempalte to create the new part?\ny - use existing to create the part / n - create new template")
+                    if input() == "y":
+                        newTemplate = False
+                    else:
+                        newTemplate = True
+
+                templateObj = None
+                if newTemplate:
+                    print("Creating new template...")
+                    args = {
+                        'name': template,
+                        'description': fields["template_description"],
+                        'category': category_pk,
+                        'default_location': location_pk,
+                        'component': True,
+                        'is_template': True
+                    }
+                    print("Would you like to provide additional information? (y/n)")
+                    if input() == "y":
+                        print("Please enter the image link (enter to skip):")
+                        inp = input()
+                        if inp != "":
+                            args['remote_image'] = inp
+                        print("Please enter the minimum stock value (enter to skip):")
+                        inp = input()
+                        if inp != "":                    
+                            args['minimum_stock'] = int(inp)
+                        print("Please enter the note (enter to skip):")
+                        inp = input()
+                        if inp != "":
+                            args['note'] = inp
+                        print("Please enter the link (enter to skip):")
+                        inp = input()
+                        if inp != "":
+                            args['link'] = inp
+                    os.system(clr)
+                    # print the dict in a nice format
+                    print("Template information:")  
+                    for key, value in args.items():
+                        if key == "category":
+                            value = [elem for elem in categories if elem.pk == value][0].name
+                        elif key == "default_location":
+                            value = [elem for elem in locations if elem.pk == value][0].name
+                        print(f"{key}: {value}")
+                    print("Confirm template information? (y/n)")
+                    if input() == "y":
+                        templateObj = Part.create(api, args)
+                        print("Template created!")
+
+                os.system(clr)
+            else:
+                newTemplate = False
+
+                required_templates = [
+                    {"name": "Resistance", "units": "ohm"},
+                    {"name": "Power rating", "units": "W"},
+                    {"name": "Capacitance", "units": "F"},
+                    {"name": "Voltage rating", "units": "V"},
+                    {"name": "Inductance", "units": "H"},
+                    {"name": "Current rating", "units": "A"},
+                    {"name": "Package"}
+                ]
+
+                # Check existing templates
+                existing_templates = {template["name"] for template in ParameterTemplate.list(api)}
+
+                if any(template["name"] not in existing_templates for template in required_templates):
+                    print("Adding missing parameter templates...")
+
+                # Create missing templates
+                for template in required_templates:
+                    if template["name"] not in existing_templates:
+                        ParameterTemplate.create(api, template)
+
+
+
+                infoDict = utils.parseComponent(fields["description"])
+                part_parameters = {}
+
+                # refactoring hell :amhollow"
+                key_mapping = {
+                    "res_value": "Resistance",
+                    "power_value": "Power",
+                    "cap_value": "Capacitance",
+                    "volt_value": "Voltage rating",
+                    "ind_value": "Inductance",
+                    "amp_value": "Current rating"
+                }
+
+                # Assign parameter values based on the parsed component info
+                for key, param_name in key_mapping.items():
+                    if key in infoDict:
+                        value, unit = utils.splitUnits(infoDict[key])
+                        part_parameters[param_name] = [value, unit]
+
+                part_parameters["Package"] = [package, ""]
+
+                print("The following parameters were found:")
+                for param, (value, unit) in part_parameters.items():
+                    print(f"{param}:\t{value}\t{unit}")
+
+                print("Would you like to edit the parameters? (y/n)")
+                if input() == "y":
+                    for param, (value, unit) in part_parameters.items():
+                        print(f"Current value for {param}: {value} {unit}")
+                        print("Do you want to edit this parameter? (y/n)")
+                        if input().lower() == "y":
+                            new_value = input(f"Enter new value for {param} [{unit}]: ")
+                            if new_value == "":
+                                del part_parameters[param]
+                                continue
+                            else:
+                                part_parameters[param] = [new_value, unit]  # Keep the unit unchanged
+                                print(f"{param} updated to {new_value} {unit}")
+
+                os.system(clr)
+
+
             print("Creating new part...")
             print("Link to part: " + fields["link"])
-            variant_of = partTemplate if not newTemplate else templateObj
             args = {
                 'name': fields["name"],
                 'description': fields["description"],
@@ -240,8 +314,11 @@ def main():
                 'component': True,
                 'is_template': False
             }
-            if not variant_of == None:
-                args['variant_of'] = variant_of.pk
+
+            if(use_templates):
+                variant_of = partTemplate if not newTemplate else templateObj
+                if not variant_of == None:
+                    args['variant_of'] = variant_of.pk
 
             print("Would you like to provide additional information? (y/n)")
             if input() == "y":
@@ -277,6 +354,16 @@ def main():
             if input() == "y":
                 part = Part.create(api, args)
                 print("Part created!")
+
+            print("Adding parameters...")
+
+            if(not use_templates):
+                for template in ParameterTemplate.list(api):
+                    try:
+                        value, unit = part_parameters[template["name"]]
+                        Parameter.create(api, {'part':part.pk, 'template': template.pk, 'data': value})
+                    except:
+                        continue
 
             os.system(clr)
 

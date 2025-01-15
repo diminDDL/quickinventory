@@ -41,7 +41,7 @@ class LCSC():
                     data = json.loads(sel.xpath("/html/head/script[4]/text()").get())
 
                     fields["name"] = data["name"]
-                    fields["description"]  = data["sku"]
+                    fields["description"]  = data["description"]
                     fields["template_description"] = data["category"].split("/")[1]
                     fields["remote_image"] = data["image"]
                     fields["link"] = response.url
