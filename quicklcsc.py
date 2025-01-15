@@ -77,7 +77,7 @@ def main():
                 lcscPart = ""
                 part = ""
                 if cam == "y":
-                    camera = cv2.VideoCapture("http://192.168.100.157:8080/video")
+                    camera = cv2.VideoCapture(0)
                     ret, frame = camera.read()
                     print("Press ESC to exit the camera.")
                     while ret:
