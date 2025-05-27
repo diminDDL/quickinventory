@@ -3,6 +3,8 @@ import cv2
 import re
 import html
 import backend.lcsc
+from enum import Enum, auto
+from inventree.part import PartCategory, Part
 from pyzbar import pyzbar
 from anytree import Node, RenderTree, search
 from difflib import get_close_matches
@@ -132,7 +134,7 @@ class Tools():
         readline.set_pre_input_hook()
         return result
     
-    def findPartTemplate(self, template, templates):
+    def findPartTemplate(self, template: str, templates: list[PartCategory]) -> PartCategory | None:
         try:
             partTemplate = get_close_matches(template, [i.name for i in templates], n=1, cutoff=0.85)[0]
             # now get the part object that has the same name as the template
@@ -140,7 +142,23 @@ class Tools():
         except IndexError:
             partTemplate = None
         return partTemplate
-    
+
+    def findPart(self, partNumber: str, parts: list[Part], partName: str = None) -> int | None:
+        for part in parts:
+            # print(f"Checking part: {part.name} with keywords: {part.keywords}")
+            # First we try to find the exact match of partNumber in the keywords of the parts
+            if partNumber.lower() in (part.keywords or "").lower():
+                return part.pk
+        
+        # If no exact match is found, we try to find a close match of the part name
+        if partName:
+            close_matches = get_close_matches(partName, [part.name for part in parts], n=1, cutoff=0.85)
+            if close_matches:
+                return next((part.pk for part in parts if part.name == close_matches[0]), None)
+            
+        # If no match is found, return None
+        return None
+
     def read_barcodes(self, frame):
         # returns the frame and the name of the company and the part number
         # for example, ["LCSC", "C123456789"] or ["Digikey", "123-456-ABC"] and so on
@@ -158,3 +176,8 @@ class Tools():
                 part = self.lcsc.decodeCode(barcode_info)
                 print(f"Extracted part number: {part}")
         return frame, part
+    
+class DuplicateChoice(Enum):
+    ADD_STOCK = auto()
+    SKIP = auto()
+    CREATE_NEW = auto()

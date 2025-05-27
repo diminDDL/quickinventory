@@ -11,37 +11,45 @@ if TYPE_CHECKING:
 
 class LCSC():
     def __init__(self, utils: Type[Tools]):
-        self.LCSC_NUM = re.compile('pc:(C\d*)')
+        self.LCSC_NUM = re.compile(r'pc:(C\d*)')
         self.utils = utils
 
-    def decodeCode(self, text):
+    def decodeCode(self, text: str) -> list[str]:
         # decodes the raw text from the barcode and returns the LCSC part number for example "C123456789"
         LCSCPartNumber = re.search(self.LCSC_NUM, text)
         LCSCPartNumber = str(LCSCPartNumber.group(1)).strip()
         store = "LCSC" if LCSCPartNumber != "" else ""
         return [store, LCSCPartNumber]
-    
-    def query(self, partNumber):
+
+    def query(self, partNumber: str, debug: bool = False) -> tuple[dict, str, str]:
         headers = {
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 uacq'
         }
         # queries the LCSC API for the part number and returns the data
         query = "https://www.lcsc.com/search?q=" + partNumber
         response = requests.get(query, headers=headers)
-        #print(response.text)
+        if debug:
+            print(response.text)
         fields = {}
         package = ""
         try:
             if response.status_code == 200:
-                #print("Query successful!")
+                if debug:
+                    print("Query successful!")
                 sel = Selector(response.text)
 
                 try:
                 # gets the content of script tag containing full info
-                    data = json.loads(sel.xpath("/html/head/script[4]/text()").get())
+                    data = sel.xpath("/html/head/script[5]/text()").get()
+                
+                    if debug:
+                        print("Data found: ", data)
+
+                    data = json.loads(data)
 
                     fields["name"] = data["name"]
                     fields["description"]  = data["description"]
+                    fields["keywords"] = partNumber
                     fields["template_description"] = data["category"].split("/")[1]
                     fields["remote_image"] = data["image"]
                     fields["link"] = response.url
@@ -49,7 +57,7 @@ class LCSC():
                     package = re.sub(' +', ' ', self.utils.cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]/div/span").get()).strip())
 
                     if fields["unit_price"] == "0.00":
-                        print("Part is discontinued!")
+                        print("Part is potentially discontinued (0.00) price!")
 
                 except Exception as e:
                     print(e)
@@ -60,4 +68,4 @@ class LCSC():
             print(e)
             print("Invalid part number!")
         
-        return [fields, package]
+        return [fields, package, partNumber]
