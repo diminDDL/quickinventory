@@ -325,6 +325,13 @@ def main():
             # TODO: clear screens more aggressively
             # TODO: add ability to type category and auto complete for it
 
+            # FIXME:
+            # If a part exists but there are no stock items it will crash
+            # Check if part exists before creating template maybe?
+            # If saying no to an existing template something weird happens it just continues to part creation
+            # LCSC seems to add manufacturers to the part name, which is not always desired
+            # Before creating part we need a confirmation step where we could edit all the bits
+            # If template is empty skip searching for it and assume the user doesn't want one
 
             # Get the LCSC part number
             fields, package, partNumber = query_lcsc_part(lcsc, cam)
