@@ -2,6 +2,8 @@ toml
 inventree
 anytree
 requests
+requests_html
+click
 parsel
 pyzbar
 opencv-python

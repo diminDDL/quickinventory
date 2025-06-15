@@ -3,69 +3,99 @@ from typing import TYPE_CHECKING
 
 import re
 import json
-import requests
 from typing import Type
 from parsel import Selector
+from backend.base import NORMALIZED_PARAM_NAMES, baseSupplier, PartData, Parameter
+
 if TYPE_CHECKING:
     from backend.utilities import Tools
 
-class LCSC():
+from requests_html import HTMLSession
+
+class LCSC(baseSupplier):
+    """Supplier implementation for LCSC Electronics (https://www.lcsc.com/)"""
+
     def __init__(self, utils: Type[Tools]):
-        self.LCSC_NUM = re.compile(r'pc:(C\d*)')
+        self.LCSC_NUM = re.compile('pc:(C\d*)')
         self.utils = utils
+        self.headers = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 uacq'}
+        self.session = HTMLSession()
 
-    def decodeCode(self, text: str) -> list[str]:
-        # decodes the raw text from the barcode and returns the LCSC part number for example "C123456789"
-        LCSCPartNumber = re.search(self.LCSC_NUM, text)
-        LCSCPartNumber = str(LCSCPartNumber.group(1)).strip()
-        store = "LCSC" if LCSCPartNumber != "" else ""
-        return [store, LCSCPartNumber]
+    def parseCode(self, code: str) -> str:
+        """
+        Extract LCSC part number from scanned barcode
+        Args:
+            code: Raw barcode string from scanner
+        Returns:
+            Extracted part number or None if invalid
+        """
+        try:
+            LCSCPartNumber = re.search(self.LCSC_NUM, code)
+            LCSCPartNumber = str(LCSCPartNumber.group(1)).strip()
+            
+            if LCSCPartNumber == "":
+                print("Invalid barcode!")
+                return None
 
-    def query(self, partNumber: str, debug: bool = False) -> tuple[dict, str, str]:
-        headers = {
-            'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 uacq'
-        }
+            return LCSCPartNumber
+        except:
+            return None
+    
+    def query(self, partNumber) -> PartData:
         # queries the LCSC API for the part number and returns the data
         query = "https://www.lcsc.com/search?q=" + partNumber
-        response = requests.get(query, headers=headers)
-        if debug:
-            print(response.text)
-        fields = {}
-        package = ""
+        response = self.session.get(query, headers=self.headers)
         try:
-            if response.status_code == 200:
-                if debug:
-                    print("Query successful!")
-                sel = Selector(response.text)
+            if response.status_code != 200:
+                return None
+            
+            # Reder the website to get full specification table
+            response.html.render()
+            sel = Selector(response._html.html)
 
-                try:
-                # gets the content of script tag containing full info
-                    data = sel.xpath("/html/head/script[5]/text()").get()
+            try:
+                parameters = []
+                specification_table_path = "(//div[contains(@class, 'v-data-table__wrapper')]//table)"
+                table = sel.xpath(specification_table_path)
                 
-                    if debug:
-                        print("Data found: ", data)
+                if not table:
+                    raise Exception(f"Product specifications table not found! xpath={specification_table_path}")
 
-                    data = json.loads(data)
+                # Scrape parameters from the specification table 
+                rows = table[0].xpath(".//tbody/tr")
+                for r in rows:
+                    cells = r.xpath("./td")
+                    if len(cells) >= 2:
+                        key = r.xpath("string(./td[1])").get().strip()
+                        val = r.xpath("string(./td[2])").get().strip()
+                        if key.lower().replace(" ", "") in NORMALIZED_PARAM_NAMES.keys():
+                            parameters.append(Parameter(
+                                name = key, value_str = val
+                            ))
 
-                    fields["name"] = data["name"]
-                    fields["description"]  = data["description"]
-                    fields["keywords"] = partNumber
-                    fields["template_description"] = data["category"].split("/")[1]
-                    fields["remote_image"] = data["image"]
-                    fields["link"] = response.url
-                    fields["unit_price"] = data["offers"]["price"]
+                # gets the content of script tag containing full info
+                data = json.loads(sel.xpath("/html/head/script[12]/text()").get())
+
+                return PartData(
+                    supplier_pn = partNumber,
+                    manufacturer_pn= data["mpn"],
+                    name = data["name"],
+                    description = data["description"],
+                    template_description = data["category"].split("/")[1],
+                    parameters=parameters,
+                    remote_image = data["image"],
+                    link = response.url,
+                    unit_price = float(data["offers"]["price"]), 
                     package = re.sub(' +', ' ', self.utils.cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]/div/span").get()).strip())
+                )    
 
-                    if fields["unit_price"] == "0.00":
-                        print("Part is potentially discontinued (0.00) price!")
-
-                except Exception as e:
-                    print(e)
-                    print("No data found")
-
+            except Exception as e:
+                print(e)
+                print("No data found")
+                return None
 
         except Exception as e:
             print(e)
             print("Invalid part number!")
+            return None
         
-        return [fields, package, partNumber]

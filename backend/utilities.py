@@ -1,17 +1,18 @@
+import os
 import readline
 import cv2
 import re
 import html
 import backend.lcsc
-from enum import Enum, auto
-from inventree.part import PartCategory, Part
 from pyzbar import pyzbar
+from inventree.api import InvenTreeAPI
+from inventree.part import PartCategory
+from inventree.stock import StockLocation
 from anytree import Node, RenderTree, search
 from difflib import get_close_matches
 
 class Tools():
     def __init__(self):
-        self.lcsc = backend.lcsc.LCSC(utils=self)
         self.CLEANR = re.compile('<.*?>')
         self.CLEAN_NUMERIC = re.compile('[^0-9.,]')
 
@@ -42,10 +43,10 @@ class Tools():
             i += 1
         return tree_ids
 
-    def parseComponent(self, str) -> list:
+    # kept for backwards compability with component templates
+    def parseComponent(self, str) -> dict:
         # parses the string and returns the following
         # component value
-        # component package
         # voltage/power rating
         cap_end = ["f", "mf", "uf", "μF", "nf", "pf"]
         cap_value = ""
@@ -59,6 +60,8 @@ class Tools():
         amp_value = ""
         power_end = ["w", "mw", "uw", "vw"]
         power_value = ""
+        percent_end = ["%"]
+        percent_value = ""
         split = str.strip().split(" ")
         for i in split:
             for j in cap_end:
@@ -79,6 +82,9 @@ class Tools():
             for j in amp_end:
                 if j in i.lower() and i.lower().strip(j).replace(".", "").replace(",", "").isdigit():
                     amp_value = i
+            for j in percent_end:
+                if j in i.lower() and i.lower().strip(j).replace(".", "").replace(",", "").replace("±", "").isdigit():
+                    percent_value = i.replace("±", "")
         
         # construct a return dict, if something is empty, don't add it
         ret = {}
@@ -94,9 +100,12 @@ class Tools():
             ret["power_value"] = power_value
         if amp_value != "":
             ret["amp_value"] = amp_value
+        if percent_value != "":
+            ret["percent_value"] = percent_value
         return ret
     
-    def splitUnits(self, str):
+    # kept for backwards compability with component templates
+    def splitUnits(self, str: str):
         # Splits given string into value (with SI scalar) and a unit
         scalars = ["G", "M", "k", "m", "u", "μ", "n", "p"]
     
@@ -112,6 +121,12 @@ class Tools():
                 print("Invalid input format! The string contains more than one scalar.")
                 return None, None
         else:  # This is for values like 15R or 5F, where no scalar is found
+            if "ohm" in str.lower():
+                value = str[:-3]
+                unit = "ohm"
+            if "r" in str.lower():
+                value = str[:-1]
+                unit = "ohm"
             if len(str) > 1:
                 value = str[:-1]  # All characters except the last
                 unit = str[-1:]  # Last character
@@ -125,7 +140,7 @@ class Tools():
 
         return value, unit
     
-    def input_with_prefill(self, prompt, text) -> str:
+    def inputWithPrefill(self, prompt, text) -> str:
         def hook():
             readline.insert_text(text)
             readline.redisplay()
@@ -134,7 +149,7 @@ class Tools():
         readline.set_pre_input_hook()
         return result
     
-    def findPartTemplate(self, template: str, templates: list[PartCategory]) -> PartCategory | None:
+    def findPartTemplate(self, template, templates):
         try:
             partTemplate = get_close_matches(template, [i.name for i in templates], n=1, cutoff=0.85)[0]
             # now get the part object that has the same name as the template
@@ -142,27 +157,9 @@ class Tools():
         except IndexError:
             partTemplate = None
         return partTemplate
-
-    def findPart(self, partNumber: str, parts: list[Part], partName: str = None) -> int | None:
-        for part in parts:
-            # print(f"Checking part: {part.name} with keywords: {part.keywords}")
-            # First we try to find the exact match of partNumber in the keywords of the parts
-            if partNumber.lower() in (part.keywords or "").lower():
-                return part.pk
-        
-        # If no exact match is found, we try to find a close match of the part name
-        if partName:
-            close_matches = get_close_matches(partName, [part.name for part in parts], n=1, cutoff=0.85)
-            if close_matches:
-                return next((part.pk for part in parts if part.name == close_matches[0]), None)
-            
-        # If no match is found, return None
-        return None
-
+    
     def read_barcodes(self, frame):
-        # returns the frame and the name of the company and the part number
-        # for example, ["LCSC", "C123456789"] or ["Digikey", "123-456-ABC"] and so on
-        part = ["", None]
+        barcode_info = None
         barcodes = pyzbar.decode(frame)
         for barcode in barcodes:
             x, y , w, h = barcode.rect
@@ -170,14 +167,37 @@ class Tools():
             cv2.rectangle(frame, (x, y),(x+w, y+h), (0, 255, 0), 2)
     
             font = cv2.FONT_HERSHEY_DUPLEX
-            cv2.putText(frame, barcode_info, (x + 6, y - 6), font, 2.0, (255, 255, 255), 1)        #3
-            if barcode_info.startswith('{') and barcode_info.endswith('}'):
-                # print(f"Recognized QR code: {barcode_info}")
-                part = self.lcsc.decodeCode(barcode_info)
-                print(f"Extracted part number: {part}")
-        return frame, part
+            cv2.putText(frame, barcode_info, (x + 6, y - 6), font, 2.0, (255, 255, 255), 1)
+        return frame, barcode_info
     
-class DuplicateChoice(Enum):
-    ADD_STOCK = auto()
-    SKIP = auto()
-    CREATE_NEW = auto()
+    def createCategoryTree(self, api: InvenTreeAPI) -> tuple[PartCategory, Node]:
+        categories = PartCategory.list(api)
+        # iterate over all categories and create a hierarchical tree
+        print("Creating category tree...")
+        category_tree_root = Node("root")
+        for i in categories:
+            parent = i.getParentCategory()
+            if parent == None:
+                Node(i.pk, parent=category_tree_root)
+            else:
+                # find the parent category in the tree
+                res = search.findall(category_tree_root, filter_=lambda node: str(node.name) == str(parent.pk), maxcount=1)[0]
+                Node(i.pk, parent=res)
+        
+        return categories, category_tree_root
+
+    def createLocationTree(self, api: InvenTreeAPI) -> tuple[StockLocation, Node]:
+        locations = StockLocation.list(api)
+        print("Creating location tree...")
+        location_tree_root = Node("root")
+        for i in locations:
+            parent = i.getParentLocation()
+            if parent == None:
+                Node(i.pk, parent=location_tree_root)
+            else:
+                # find the parent category in the tree
+                res = search.findall(location_tree_root, filter_=lambda node: str(node.name) == str(parent.pk), maxcount=1)[0]
+                Node(i.pk, parent=res)
+
+        return locations, location_tree_root
+        
