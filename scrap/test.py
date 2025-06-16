@@ -6,6 +6,9 @@ test_str5 = " 	1uH ±20% 3.3mΩ 28A SMD,10x11.5x4mm Power Inductors ROHS "
 test_str6 = "3A 22uH ±20% 130mΩ SMD,7.1x6.6x3mm Power Inductors ROHS "
 test_str7 = "3 A 22 uH ± 20 % 130 mΩ SMD,7.1x6.6x3mm Power Inductors ROHS "
 
+test_str8 = "33µA Special Character type one"
+test_str9 = "33μV Special Character type one"
+
 def __is_number_str(s):
     """Check if a string represents a valid number (handles decimals and commas)."""
     s_clean = s.replace(',', '')  # Remove commas from numbers
@@ -33,6 +36,10 @@ def parseComponent(str):
     - Extract tolerance by cleaning % values
     - Return any found specifications
     """
+
+    # Normalize micro characters to 'u'
+    str = str.replace(chr(181), "u").replace(chr(956), "u")
+
     # Unit definitions for different component types
     cap_end = ["f", "mf", "uf", "μf", "nf", "pf"]
     res_end = ["k", "m", "g", "r", "kω", "mω", "gω", "ω", "kohm", "mohm", "gohm", "ohm", "kohms", "mohms", "gohms", "ohms"]
@@ -160,3 +167,7 @@ print(test_str6)
 print(parseComponent(test_str6))
 print(test_str7)
 print(parseComponent(test_str7))
+print(test_str8)
+print(parseComponent(test_str8))
+print(test_str9)
+print(parseComponent(test_str9))

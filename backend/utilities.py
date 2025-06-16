@@ -65,6 +65,9 @@ class Tools():
         3. Process tokens to extract param information
         4. Return dictionary with found specifications
         """
+        # Normalize micro characters to 'u'
+        str = str.replace(chr(181), "u").replace(chr(956), "u")
+
         # Unit definitions for different component types
         cap_end = ["f", "mf", "uf", "μf", "nf", "pf"]
         res_end = ["k", "m", "g", "r", "kω", "mω", "gω", "ω", "kohm", "mohm", "gohm", "ohm", "kohms", "mohms", "gohms", "ohms"]
