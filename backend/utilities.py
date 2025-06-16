@@ -64,12 +64,6 @@ class Tools():
         2. Define unit categories and combine for quick lookup
         3. Process tokens to extract param information
         4. Return dictionary with found specifications
-        
-        Steps:
-        - Tokenize and merge value-unit pairs
-        - Check each token against unit lists (longest units first)
-        - Extract tolerance by cleaning % values
-        - Return any found specifications
         """
         # Unit definitions for different component types
         cap_end = ["f", "mf", "uf", "μf", "nf", "pf"]
