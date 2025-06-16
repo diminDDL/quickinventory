@@ -5,6 +5,7 @@ import sys, traceback
 from inventree.api import InvenTreeAPI
 from inventree.part import Part
 
+import backend.digikey
 import backend.lcsc
 import backend.utilities
 from backend.base import CLR
@@ -13,7 +14,8 @@ from backend.base import baseSupplier
 from backend.ui_utilities import *
 
 suppliers = {
-    "LCSC": backend.lcsc.LCSC
+    "LCSC": backend.lcsc.LCSC,         # QR codes
+    "DigiKey": backend.digikey.DigiKey # Data Matrix ECC 200
 }
 
 def connectToInventree(config: str):
@@ -32,28 +34,33 @@ def connectToInventree(config: str):
 def run_scanner(utils: backend.utilities.Tools, supplier: baseSupplier, adress: str) -> Part:
     code = None
 
-    camera = cv2.VideoCapture(adress)
-    if not camera.isOpened():
-        print("Error: Could not open camera.")
+    # camera = cv2.VideoCapture(adress)
+    # if not camera.isOpened():
+    #     print("Error: Could not open camera.")
 
     print("Press ESC to exit the camera.")
     while True:
-        ret, frame = camera.read() 
-        frame, result = utils.read_barcodes(frame)
+        # ret, frame_raw = camera.read()
+        frame_raw = cv2.imread("frame.png")
+        frame, results = utils.read_barcodes(frame_raw.copy())
         cv2.imshow('Barcode/QR code reader', frame)
         
         if cv2.waitKey(1) & 0xFF == 27:
             break
 
-        if result == None:
+        if results == []:
             continue
 
-        code = supplier.parseCode(result)
+        for result in results:
+            code = supplier.parseCode(result)
+            if code != None:
+                break
+
         if code != None:
-            break
+                break
 
     cv2.destroyAllWindows()
-    camera.release()
+    # camera.release()
     return code
 
 def main():    
@@ -61,7 +68,8 @@ def main():
         utils = backend.utilities.Tools()
         os.system(CLR)
 
-        api = connectToInventree("config.toml")
+        config = "config.toml"
+        api = connectToInventree(config)
 
         categories, category_tree_root = utils.createCategoryTree(api)
         locations, location_tree_root = utils.createLocationTree(api)
@@ -79,7 +87,7 @@ def main():
             show_choices=False
         )
 
-        supplier = suppliers[supplier_names[choice - 1]](utils)
+        supplier = suppliers[supplier_names[choice - 1]](utils, config)
         os.system(CLR)
 
         # Here the templates were used instead of the part parameters, which were introduced later. 

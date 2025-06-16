@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 
 import re
 import json
-from typing import Type
 from parsel import Selector
 from backend.base import NORMALIZED_PARAM_NAMES, baseSupplier, PartData, Parameter
 
@@ -15,7 +14,7 @@ from requests_html import HTMLSession
 class LCSC(baseSupplier):
     """Supplier implementation for LCSC Electronics (https://www.lcsc.com/)"""
 
-    def __init__(self, utils: Type[Tools]):
+    def __init__(self, utils: Tools, config):
         self.LCSC_NUM = re.compile('pc:(C\d*)')
         self.utils = utils
         self.headers = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 uacq'}
@@ -85,7 +84,8 @@ class LCSC(baseSupplier):
                     parameters=parameters,
                     remote_image = data["image"],
                     link = response.url,
-                    unit_price = float(data["offers"]["price"]), 
+                    unit_price = float(data["offers"]["price"]),
+                    # Backwards compatibility with component templates 
                     package = re.sub(' +', ' ', self.utils.cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]/div/span").get()).strip())
                 )    
 
@@ -99,3 +99,5 @@ class LCSC(baseSupplier):
             print("Invalid part number!")
             return None
         
+    def _mapParameters(self, supplier_params) -> list[Parameter]:
+        pass

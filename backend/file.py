@@ -6,7 +6,11 @@ class fileHandler:
         self.path = path
         self.emptyFile = """[server]
 ip = "1.1.1.1:1337" # IP and port of the server
-token = "token" # token placeholder"""
+token = "token" # token placeholder
+
+[digikey] # https://developer.digikey.com
+client-id = "" # production app client id 
+client-secret = "" # production app client secret key"""
         self.check_file()
 
     def check_file(self):

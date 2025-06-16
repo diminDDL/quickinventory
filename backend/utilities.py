@@ -3,7 +3,7 @@ import readline
 import cv2
 import re
 import html
-import backend.lcsc
+from pylibdmtx import pylibdmtx
 from pyzbar import pyzbar
 from inventree.api import InvenTreeAPI
 from inventree.part import PartCategory
@@ -43,67 +43,142 @@ class Tools():
             i += 1
         return tree_ids
 
+    def __is_number_str(self, s):
+        """Check if a string represents a valid number (handles decimals and commas)."""
+        s_clean = s.replace(',', '')  # Remove commas from numbers
+        if s_clean == '':
+            return False
+        if s_clean.count('.') > 1:  # More than one decimal point is invalid
+            return False
+        # Check if string is digits after removing one decimal point
+        return s_clean.replace('.', '', 1).isdigit()
+
     # kept for backwards compability with component templates
-    def parseComponent(self, str) -> dict:
-        # parses the string and returns the following
-        # component value
-        # voltage/power rating
-        cap_end = ["f", "mf", "uf", "μF", "nf", "pf"]
-        cap_value = ""
-        res_end = ["k", "m", "g", "r", "kω", "mω", "gω", "ω", "kohm", "mohm", "gohm", "ohm", "kohms", "mohms", "gohms", "ohms"]
-        res_value = ""
-        ind_end = ["mh", "uh", "μh", "nh", "ph"]
-        ind_value = ""
-        volt_end = ["v", "kv", "mv", "uv", "vv"]
-        volt_value = ""
-        amp_end = ["a", "ma", "ua"]
-        amp_value = ""
-        power_end = ["w", "mw", "uw", "vw"]
-        power_value = ""
-        percent_end = ["%"]
-        percent_value = ""
-        split = str.strip().split(" ")
-        for i in split:
-            for j in cap_end:
-                if j in i.lower() and i.lower().strip(j).replace(".", "").replace(",", "").isdigit():
-                    cap_value = i
-            for j in res_end:
-                if j in i.lower() and i.lower().strip(j).replace(".", "").replace(",", "").isdigit():
-                    res_value = i
-            for j in ind_end:
-                if j in i.lower() and i.lower().strip(j).replace(".", "").replace(",", "").isdigit():
-                    ind_value = i
-            for j in volt_end:
-                if j in i.lower() and i.lower().strip(j).replace(".", "").replace(",", "").isdigit():
-                    volt_value = i
-            for j in power_end:
-                if j in i.lower() and i.lower().strip(j).replace(".", "").replace(",", "").isdigit():
-                    power_value = i
-            for j in amp_end:
-                if j in i.lower() and i.lower().strip(j).replace(".", "").replace(",", "").isdigit():
-                    amp_value = i
-            for j in percent_end:
-                if j in i.lower() and i.lower().strip(j).replace(".", "").replace(",", "").replace("±", "").isdigit():
-                    percent_value = i.replace("±", "")
+    def parseComponent(self, str):
+        """
+        Parses electronic component descriptions to extract key specifications.
+        Handles spaces between values and units, and extracts tolerance percentages.
         
-        # construct a return dict, if something is empty, don't add it
+        Approach:
+        1. Preprocess string to merge separated value-unit pairs
+        2. Define unit categories and combine for quick lookup
+        3. Process tokens to extract param information
+        4. Return dictionary with found specifications
+        
+        Steps:
+        - Tokenize and merge value-unit pairs
+        - Check each token against unit lists (longest units first)
+        - Extract tolerance by cleaning % values
+        - Return any found specifications
+        """
+        # Unit definitions for different component types
+        cap_end = ["f", "mf", "uf", "μf", "nf", "pf"]
+        res_end = ["k", "m", "g", "r", "kω", "mω", "gω", "ω", "kohm", "mohm", "gohm", "ohm", "kohms", "mohms", "gohms", "ohms"]
+        ind_end = ["mh", "uh", "μh", "nh", "ph"]
+        volt_end = ["v", "mv", "uv", "vv"]
+        amp_end = ["a", "ma", "ua"]
+        power_end = ["w", "mw", "uw", "vw"]
+        tolerance_end = ["%"]
+        
+        # Create combined set of all units for token merging
+        all_units = set(cap_end + res_end + ind_end + volt_end + amp_end + power_end + tolerance_end)
+        
+        # Preprocessing: Merge separated value-unit pairs
+        tokens = str.strip().replace("±", "").split()
+        new_tokens = []
+        i = 0
+        while i < len(tokens):
+            # Handle value-unit pairs separated by spaces
+            if i < len(tokens) - 1 and self.__is_number_str(tokens[i]) and tokens[i+1].lower() in all_units:
+                new_tokens.append(tokens[i] + tokens[i+1])  # Merge value + unit
+                i += 2  # Skip next token since merged
+            else:
+                new_tokens.append(tokens[i])
+                i += 1
+
+        # Initialize found values
+        cap_value = res_value = ind_value = volt_value = amp_value = power_value = tolerance_value = ""
+
+        # Sort units by length (longest first) for accurate matching
+        unit_lists = {
+            "cap": sorted(cap_end, key=len, reverse=True),
+            "res": sorted(res_end, key=len, reverse=True),
+            "ind": sorted(ind_end, key=len, reverse=True),
+            "volt": sorted(volt_end, key=len, reverse=True),
+            "amp": sorted(amp_end, key=len, reverse=True),
+            "power": sorted(power_end, key=len, reverse=True),
+            "tol": sorted(tolerance_end, key=len, reverse=True)
+        }
+
+        # Process each token to identify component specifications
+        for token in new_tokens:
+            # Capacitance extraction
+            for unit in unit_lists["cap"]:
+                if token.lower().endswith(unit):
+                    base = token[:-len(unit)]
+                    if self.__is_number_str(base):
+                        cap_value = token
+                        break  # Stop checking other capacitance units
+            
+            # Resistance extraction
+            for unit in unit_lists["res"]:
+                if token.lower().endswith(unit):
+                    base = token[:-len(unit)]
+                    if self.__is_number_str(base):
+                        res_value = token
+                        break
+            
+            # Inductance extraction
+            for unit in unit_lists["ind"]:
+                if token.lower().endswith(unit):
+                    base = token[:-len(unit)]
+                    if self.__is_number_str(base):
+                        ind_value = token
+                        break
+            
+            # Voltage extraction
+            for unit in unit_lists["volt"]:
+                if token.lower().endswith(unit):
+                    base = token[:-len(unit)]
+                    if self.__is_number_str(base):
+                        volt_value = token
+                        break
+            
+            # Current extraction
+            for unit in unit_lists["amp"]:
+                if token.lower().endswith(unit):
+                    base = token[:-len(unit)]
+                    if self.__is_number_str(base):
+                        amp_value = token
+                        break
+            
+            # Power extraction
+            for unit in unit_lists["power"]:
+                if token.lower().endswith(unit):
+                    base = token[:-len(unit)]
+                    if self.__is_number_str(base):
+                        power_value = token
+                        break
+
+            for unit in unit_lists["tol"]:
+                if token.lower().endswith(unit):
+                    base = token[:-len(unit)]
+                    if self.__is_number_str(base):
+                        tolerance_value = token.replace("±", "")
+                        break
+            
+
+        # Build result dictionary with found values
         ret = {}
-        if cap_value != "":
-            ret["cap_value"] = cap_value
-        if res_value != "":
-            ret["res_value"] = res_value
-        if ind_value != "":
-            ret["ind_value"] = ind_value
-        if volt_value != "":
-            ret["volt_value"] = volt_value
-        if power_value != "":
-            ret["power_value"] = power_value
-        if amp_value != "":
-            ret["amp_value"] = amp_value
-        if percent_value != "":
-            ret["percent_value"] = percent_value
+        if cap_value: ret["cap_value"] = cap_value
+        if res_value: ret["res_value"] = res_value
+        if ind_value: ret["ind_value"] = ind_value
+        if volt_value: ret["volt_value"] = volt_value
+        if power_value: ret["power_value"] = power_value
+        if amp_value: ret["amp_value"] = amp_value
+        if tolerance_value: ret["tolerance"] = tolerance_value
         return ret
-    
+        
     # kept for backwards compability with component templates
     def splitUnits(self, str: str):
         # Splits given string into value (with SI scalar) and a unit
@@ -136,7 +211,7 @@ class Tools():
 
         # Clean up extra spaces from value and unit
         value = value.replace(" ", "")
-        unit = unit.replace(" ", "")
+        unit = unit.replace(" ", "").capitalize()
 
         return value, unit
     
@@ -159,16 +234,27 @@ class Tools():
         return partTemplate
     
     def read_barcodes(self, frame):
-        barcode_info = None
-        barcodes = pyzbar.decode(frame)
-        for barcode in barcodes:
-            x, y , w, h = barcode.rect
-            barcode_info = barcode.data.decode('utf-8')
-            cv2.rectangle(frame, (x, y),(x+w, y+h), (0, 255, 0), 2)
-    
-            font = cv2.FONT_HERSHEY_DUPLEX
-            cv2.putText(frame, barcode_info, (x + 6, y - 6), font, 2.0, (255, 255, 255), 1)
-        return frame, barcode_info
+        font = cv2.FONT_HERSHEY_DUPLEX
+        barcode_infos = []
+
+        dm_barcodes = pylibdmtx.decode(frame, timeout=10)
+        for dm_barcode in dm_barcodes:
+            barcode_data = dm_barcode.data.decode('utf-8')
+            barcode_infos.append(barcode_data)
+            x, y, w, h = dm_barcode.rect
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.putText(frame, barcode_data, (x + 6, y - 6), font, 2.0, (255, 255, 255), 1)
+
+        standard_barcodes = pyzbar.decode(frame)
+        for barcode in standard_barcodes:
+            if barcode.type != 'DATAMATRIX':
+                barcode_data = barcode.data.decode('utf-8')
+                barcode_infos.append(barcode_data)
+                x, y, w, h = barcode.rect
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.putText(frame, barcode_data, (x + 6, y - 6), font, 2.0, (255, 255, 255), 1)
+
+        return frame, barcode_infos
     
     def createCategoryTree(self, api: InvenTreeAPI) -> tuple[PartCategory, Node]:
         categories = PartCategory.list(api)

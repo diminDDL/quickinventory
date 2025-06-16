@@ -277,3 +277,11 @@ class baseSupplier(ABC):
             Structured part data
         """
         pass
+
+    @abstractmethod
+    def _mapParameters(self, supplier_params) -> list[Parameter]:
+        """
+            Maps list of supplier parameters to list of standardized
+            Parameter objects consistent with VALID_PART_PARAMETERS. 
+        """
+        pass
