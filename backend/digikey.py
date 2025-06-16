@@ -22,7 +22,7 @@ class DigiKey(baseSupplier):
             click.secho("No client ID or client secret key found in config.yml file!", styles="bold", color="red")
             sys.exit(0)
 
-        #self.__requestBearerToken()
+        self.__requestBearerToken()
 
     def parseCode(self, code: str) -> str:
         if re.match(self.barcode_2d_re, code):
