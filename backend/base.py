@@ -64,10 +64,22 @@ class Parameter:
             ret = utils.parseComponent(self.value_str)
             values = list(ret.values())
 
-            if len(ret.values()) > 1:
-                raise Exception(f"Invalid value of given parameter ({self.name})!")
-            
-            val, unit = utils.splitUnits( next(iter(ret.values())))
+            if len(values) > 1:
+                click.echo( "Multiple possible parameter values were found for " + click.style(self.name, bold=True, fg="yellow"))
+                for idx, valstr in enumerate(values):
+                    click.secho(f"{idx}. {valstr}", bold=False)
+                
+                choice = click.prompt(
+                    f"Select correct [value][unit] option (0-{len(values)-1})",
+                    type=click.IntRange(0, len(values)-1),
+                    show_choices=False
+                )
+                selected = values[choice]
+            else:
+                # only one choice, pick it
+                selected = values[0]
+
+            val, unit = utils.splitUnits(selected)
 
             if (val, unit) != None:
                 self.value = (val, unit)
