@@ -16,6 +16,7 @@ VALID_PART_PARAMETERS = {
     "Voltage Rating": "V",
     "Forward Voltage": "V",             # TODO LCSC Mapping
     "Drain to Source Voltage": "V",
+    "Collector to Emitter Voltage": "V",# TODO LCSC Mapping
     "Current Rating": "A",              # TODO LCSC Mapping (Transistors)
     "Reverse Leackage Current": "A",    # TODO LCSC Mapping
     "Saturation Current": "A",          # TODO LCSC Mapping
@@ -61,6 +62,7 @@ class Parameter:
 
             # Should be rewritten but it's re-using functions kept for backwards compatibility with component templates
             ret = utils.parseComponent(self.value_str)
+            values = list(ret.values())
 
             if len(ret.values()) > 1:
                 raise Exception(f"Invalid value of given parameter ({self.name})!")
