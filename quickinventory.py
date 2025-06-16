@@ -34,14 +34,13 @@ def connectToInventree(config: str):
 def run_scanner(utils: backend.utilities.Tools, supplier: baseSupplier, adress: str) -> Part:
     code = None
 
-    # camera = cv2.VideoCapture(adress)
-    # if not camera.isOpened():
-    #     print("Error: Could not open camera.")
+    camera = cv2.VideoCapture(adress)
+    if not camera.isOpened():
+        print("Error: Could not open camera.")
 
     print("Press ESC to exit the camera.")
     while True:
-        # ret, frame_raw = camera.read()
-        frame_raw = cv2.imread("frame.png")
+        ret, frame_raw = camera.read()
         frame, results = utils.read_barcodes(frame_raw.copy())
         cv2.imshow('Barcode/QR code reader', frame)
         
@@ -60,7 +59,7 @@ def run_scanner(utils: backend.utilities.Tools, supplier: baseSupplier, adress: 
                 break
 
     cv2.destroyAllWindows()
-    # camera.release()
+    camera.release()
     return code
 
 def main():    
