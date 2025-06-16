@@ -130,11 +130,12 @@ class DigiKey(baseSupplier):
             for digi_id in possible_ids:
                 # Try to fetch the dict for this DigiKey ID; if found, param_dict is truthy
                 if (param_dict := param_map.get(digi_id)):
-                    params.append(Parameter(
-                        name=param_name,
-                        value_str=param_dict["ValueText"]
-                    ))
-                    break   # stop checking other IDs for this param_name
+                    if param_dict["ValueText"] != "" and param_dict["ValueText"] != "-":
+                        params.append(Parameter(
+                            name=param_name,
+                            value_str=param_dict["ValueText"]
+                        ))
+                        break   # stop checking other IDs for this param_name
         
         
         return params
