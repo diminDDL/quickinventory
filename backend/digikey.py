@@ -19,7 +19,7 @@ class DigiKey(baseSupplier):
         self.token = None
 
         if self.client_id == "" or self.client_secret == "":
-            click.secho("No client ID or client secret key found in config.yml file!", styles="bold", color="red")
+            click.secho("No client ID or client secret key found in config.yml file!", bold=True, fg="red")
             sys.exit(0)
 
         self.__requestBearerToken()
@@ -37,7 +37,7 @@ class DigiKey(baseSupplier):
             response = self.__getProductDetails(code)
 
         if response is None:
-            click.secho(f"No data found!", styles="bold", color="red")
+            click.secho(f"No data found!")
             return None
         
         parameters = self._mapParameters(response["Product"]["Parameters"])
@@ -83,7 +83,7 @@ class DigiKey(baseSupplier):
                     self.__requestBearerToken()
                     continue
                 else:
-                    click.secho(f"DigiKey API Web request error! {response.json()['detail']}", styles="bold", color="red")
+                    click.secho(f"DigiKey API Web request error! {response.json()['detail']}", bold=True, color="red")
             else:
                 break
         return None
