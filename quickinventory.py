@@ -5,9 +5,9 @@ import sys, traceback
 from inventree.api import InvenTreeAPI
 from inventree.part import Part
 
-import backend.digikey
-import backend.lcsc
-import backend.tme
+from backend.suppliers.digikey import DigiKey
+from backend.suppliers.lcsc import LCSC
+from backend.suppliers.tme import TME
 import backend.utilities
 from backend.base import CLR
 from backend.file import fileHandler
@@ -16,9 +16,9 @@ from backend.ui_utilities import *
 
 # TODO maybe add "by hand" option?
 suppliers = {
-    "LCSC": backend.lcsc.LCSC,          # QR code
-    "DigiKey": backend.digikey.DigiKey, # Data Matrix ECC 200
-    "TME": backend.tme.TME              # QR code
+    "LCSC": LCSC,          # QR code
+    "DigiKey": DigiKey, # Data Matrix ECC 200
+    "TME": TME              # QR code
 }
 
 def connectToInventree(config: str):
