@@ -10,7 +10,11 @@ token = "token" # token placeholder
 
 [digikey] # https://developer.digikey.com
 client-id = "" # production app client id 
-client-secret = "" # production app client secret key"""
+client-secret = "" # production app client secret key
+
+[tme] # https://developers.tme.eu/
+app-secret = "" # production app secret
+client-token = "" # client private key"""
         self.check_file()
 
     def check_file(self):

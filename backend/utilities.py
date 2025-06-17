@@ -74,7 +74,7 @@ class Tools():
         ind_end = ["mh", "uh", "μh", "nh", "ph"]
         volt_end = ["v", "mv", "uv", "vv"]
         amp_end = ["a", "ma", "ua"]
-        power_end = ["w", "mw", "uw", "vw"]
+        power_end = ["kw", "w", "mw", "uw", "vw"]
         tolerance_end = ["%"]
         
         # Create combined set of all units for token merging

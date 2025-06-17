@@ -255,6 +255,10 @@ class PartData:
 
 class baseSupplier(ABC):
     """Abstract base class for supplier integrations"""
+
+    @abstractmethod
+    def __init__(self,  utils: Tools, config):
+        pass
     
     @abstractmethod
     def parseCode(self, code: str) -> str:

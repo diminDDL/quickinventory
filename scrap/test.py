@@ -6,7 +6,7 @@ test_str5 = " 	1uH ±20% 3.3mΩ 28A SMD,10x11.5x4mm Power Inductors ROHS "
 test_str6 = "3A 22uH ±20% 130mΩ SMD,7.1x6.6x3mm Power Inductors ROHS "
 test_str7 = "3 A 22 uH ± 20 % 130 mΩ SMD,7.1x6.6x3mm Power Inductors ROHS "
 
-test_str8 = "33µA Special Character type one"
+test_str8 = "125kW 33µA Special Character type one"
 test_str9 = "33μV Special Character type one"
 
 def __is_number_str(s):
@@ -46,7 +46,7 @@ def parseComponent(str):
     ind_end = ["mh", "uh", "μh", "nh", "ph"]
     volt_end = ["v", "mv", "uv", "vv"]
     amp_end = ["a", "ma", "ua"]
-    power_end = ["w", "mw", "uw", "vw"]
+    power_end = ["kw", "w", "mw", "uw", "vw"]
     tolerance_end = ["%"]
     
     # Create combined set of all units for token merging

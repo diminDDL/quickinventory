@@ -7,15 +7,18 @@ from inventree.part import Part
 
 import backend.digikey
 import backend.lcsc
+import backend.tme
 import backend.utilities
 from backend.base import CLR
 from backend.file import fileHandler
 from backend.base import baseSupplier
 from backend.ui_utilities import *
 
+# TODO maybe add "by hand" option?
 suppliers = {
-    "LCSC": backend.lcsc.LCSC,         # QR codes
-    "DigiKey": backend.digikey.DigiKey # Data Matrix ECC 200
+    "LCSC": backend.lcsc.LCSC,          # QR code
+    "DigiKey": backend.digikey.DigiKey, # Data Matrix ECC 200
+    "TME": backend.tme.TME              # QR code
 }
 
 def connectToInventree(config: str):
