@@ -146,7 +146,7 @@ def main():
             # Check if part exists before creating template maybe?
             # If saying no to an existing template something weird happens it just continues to part creation
             # LCSC seems to add manufacturers to the part name, which is not always desired
-            # Before creating part we need a confirmation step where we could edit all the bits
+            # Integrate part templates with base PartData class and editing menu
             # If template is empty skip searching for it and assume the user doesn't want one
 
             # Get part data
@@ -162,7 +162,7 @@ def main():
             clear_screen()
 
             variant_of = None
-            
+
             if use_parameters:
                 part_data = validate_parameters(api, part_data)
             else:
@@ -191,6 +191,13 @@ def main():
             unit_price = handle_parts_price(part_count, part_data.unit_price)
             if unit_price > 0.0:
                 part_data.unit_price = unit_price
+
+            part_data.pretty_print()
+            choice = click.confirm( "Would you like to change any of the values?", default=False)
+            if choice:
+                part_data.interactive_edit(utils)
+                
+            clear_screen()
 
             create_part(api, category_pk, location_pk, part_data, variant_of, part_count, minimal_stock)
             # Add more functionality as needed

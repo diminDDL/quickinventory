@@ -110,7 +110,9 @@ class PartData:
             'remote_image': self.remote_image,
             'link': self.link,
             'unit_price': self.unit_price,
-            'package': self.package,
+            # TODO the package is here because of the way how the part templates 
+            # are handled but with proper integration it should be changed
+            'package': self.package,    
             'keywords': self.keywords,
             'parameters': self.parameters.copy()
         }
@@ -204,7 +206,7 @@ class PartData:
         click.echo(f"{'Name:':<20} {self.name}")
         click.echo(f"{'Package:':<20} {self.package}")
         click.echo(f"{'Unit Price:':<20} {self.unit_price:.6f}")
-        click.echo(f"{'Keywords:':<20} {click.style(self.keywords, fg='magenta')}")
+        click.echo(f"{'Keywords:':<20} {click.style(self.keywords)}")
         
         # Description section
         click.secho("\nDescriptions:", fg='bright_yellow', bold=True)
