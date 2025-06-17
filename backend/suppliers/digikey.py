@@ -48,10 +48,11 @@ class DigiKey(baseSupplier):
             name = response["Product"]["ManufacturerProductNumber"],
             description = response["Product"]["Description"]["ProductDescription"],
             parameters = parameters,
-            template_description = response["Product"]["Category"]["Name"],
+            template_description = response["Product"]["Description"]["ProductDescription"],
             remote_image = response["Product"]["PhotoUrl"],
             link = response["Product"]["ProductUrl"],
             unit_price = response["Product"]["UnitPrice"],
+            keywords= f"{response["Product"]["ProductVariations"][0]["DigiKeyProductNumber"]}, {response["Product"]["ManufacturerProductNumber"]}",
             # Backwards compatibility with component templates 
             package = next((param["ValueText"] for param in response["Product"]["Parameters"] if param["ParameterId"] == 16), "")
         )

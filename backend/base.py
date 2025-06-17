@@ -90,12 +90,138 @@ class PartData:
     manufacturer_pn: str         # Manufacturer's part number
     name: str                    # Display name of the part
     description: str             # Detailed description of the part
-    parameters: list[Parameter]  # List of technical parameters (e.g., resistance, tolerance)
-    template_description: str    # Description to use when creating part templates
+    parameters: list[Parameter]  # List of technical parameters
+    template_description: str    # Description for part templates
     remote_image: str            # URL to the part's main image
-    link: str                    # URL to the part's product page on supplier website
-    unit_price: float            # Price per single unit in supplier's currency
-    package: str                 # Physical package type (e.g., "0805", "SOT-23")
+    link: str                    # URL to the part's product page
+    unit_price: float            # Price per single unit
+    package: str                 # Physical package type
+    keywords: str = ""           # Comma-separated keywords for search
+    
+    def interactive_edit(self, utils: Tools):
+        """Interactive editor for all part data fields"""
+        # Create a copy of the original data for cancel option
+        original_data = {
+            'supplier_pn': self.supplier_pn,
+            'manufacturer_pn': self.manufacturer_pn,
+            'name': self.name,
+            'description': self.description,
+            'template_description': self.template_description,
+            'remote_image': self.remote_image,
+            'link': self.link,
+            'unit_price': self.unit_price,
+            'package': self.package,
+            'keywords': self.keywords,
+            'parameters': self.parameters.copy()
+        }
+        
+        while True:
+            os.system(CLR)
+            self.pretty_print()
+            
+            click.secho("\nEDITING MENU", fg='bright_yellow', bold=True)
+            click.echo("="*60)
+            click.echo(" 1. Supplier Part Number")
+            click.echo(" 2. Manufacturer Part Number")
+            click.echo(" 3. Name")
+            click.echo(" 4. Main Description")
+            click.echo(" 5. Template Description")
+            click.echo(" 6. Image URL")
+            click.echo(" 7. Product URL")
+            click.echo(" 8. Unit Price")
+            click.echo(" 9. Package")
+            click.echo("10. Keywords")
+            click.echo("11. Parameters")
+            click.echo("-"*60)
+            click.echo(" s. Save and continue")
+            click.echo(" r. Reset all changes")
+            click.echo(" q. Quit without saving")
+            click.echo("="*60)
+            
+            choice = click.prompt("Select field to edit", type=str).lower()
+            
+            if choice == 's':
+                return True  # Save changes
+            elif choice == 'q':
+                if click.confirm("Discard all changes?"):
+                    # Restore original data
+                    for key, value in original_data.items():
+                        setattr(self, key, value)
+                    return False
+            elif choice == 'r':
+                if click.confirm("Reset all changes to original values?"):
+                    for key, value in original_data.items():
+                        setattr(self, key, value)
+                    click.secho("✓ All changes reset", fg='green')
+                    click.pause()
+            elif choice == '11':
+                self.edit_parameters()
+            elif choice in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']:
+                field_map = {
+                    '1': ('supplier_pn', "Enter new Supplier Part Number"),
+                    '2': ('manufacturer_pn', "Enter new Manufacturer Part Number"),
+                    '3': ('name', "Enter new Part Name"),
+                    '4': ('description', "Enter new Main Description"),
+                    '5': ('template_description', "Enter new Template Description"),
+                    '6': ('remote_image', "Enter new Image URL"),
+                    '7': ('link', "Enter new Product URL"),
+                    '8': ('unit_price', "Enter new Unit Price"),
+                    '9': ('package', "Enter new Package"),
+                    '10': ('keywords', "Enter new Keywords"),
+                }
+                
+                field_name, prompt = field_map[choice]
+                current_value = str(getattr(self, field_name))
+                
+                # Use prefill input
+                new_value = utils.input_with_prefill(f"{prompt}: ", current_value)
+                
+                # Convert numeric fields
+                if field_name == 'unit_price':
+                    try:
+                        new_value = float(new_value)
+                    except ValueError:
+                        click.secho("Invalid price! Must be a number.", fg='red')
+                        click.pause()
+                        continue
+                
+                setattr(self, field_name, new_value)
+            else:
+                click.secho("Invalid selection!", fg='red')
+                click.pause()
+
+    def pretty_print(self):
+        """Display all part information in a clean, formatted layout"""
+        os.system(CLR)
+        click.secho("\n" + "="*60, fg='bright_cyan')
+        click.secho("PART SUMMARY", fg='bright_cyan', bold=True)
+        click.secho("="*60, fg='bright_cyan')
+        
+        # Basic information section
+        click.secho("\nBasic Information:", fg='bright_yellow', bold=True)
+        click.echo(f"{'Supplier PN:':<20} {click.style(self.supplier_pn, fg='bright_cyan')}")
+        click.echo(f"{'Manufacturer PN:':<20} {self.manufacturer_pn}")
+        click.echo(f"{'Name:':<20} {self.name}")
+        click.echo(f"{'Package:':<20} {self.package}")
+        click.echo(f"{'Unit Price:':<20} {self.unit_price:.6f}")
+        click.echo(f"{'Keywords:':<20} {click.style(self.keywords, fg='magenta')}")
+        
+        # Description section
+        click.secho("\nDescriptions:", fg='bright_yellow', bold=True)
+        click.echo(f"{'Main:':<20} {self.description[:100] + '...' if len(self.description) > 100 else self.description}")
+        click.echo(f"{'Template:':<20} {self.template_description[:100] + '...' if len(self.template_description) > 100 else self.template_description}")
+        
+        # URLs section
+        click.secho("\nURLs:", fg='bright_yellow', bold=True)
+        click.echo(f"{'Image:':<20} {click.style(self.remote_image, fg='bright_blue', underline=True)}")
+        click.echo(f"{'Product:':<20} {click.style(self.link, fg='bright_blue', underline=True)}")
+        
+        # Parameters section - matches the editing view format
+        click.secho("\nParameters:", fg='bright_yellow', bold=True)
+        self.__display_parameters_table()
+        
+        click.secho("\n" + "="*60, fg='bright_cyan')
+
 
     def edit_parameters(self):
         """Interactive parameter editing"""
@@ -104,6 +230,7 @@ class PartData:
         
         while True:
             os.system(CLR)
+            click.secho(f"\nEditing Parameters for {self.supplier_pn}", fg='bright_cyan', bold=True)
             self.__display_parameters_table()
             
             action = click.prompt(
@@ -141,7 +268,7 @@ class PartData:
 
     def __display_parameters_table(self):
         """Display parameters in a properly aligned table"""
-        click.secho(f"\nEditing Parameters for {self.supplier_pn}", fg='bright_cyan', bold=True)
+        
         click.echo("-" * 59)
 
         if not self.parameters:

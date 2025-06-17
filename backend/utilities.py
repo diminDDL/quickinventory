@@ -1,13 +1,12 @@
-import os
 import readline
 import cv2
 import re
 import html
+
 from pylibdmtx import pylibdmtx
+from enum import Enum, auto
+from inventree.part import PartCategory, Part
 from pyzbar import pyzbar
-from inventree.api import InvenTreeAPI
-from inventree.part import PartCategory
-from inventree.stock import StockLocation
 from anytree import Node, RenderTree, search
 from difflib import get_close_matches
 
@@ -42,7 +41,7 @@ class Tools():
             print(f"{padded}) {pre}{name}")
             i += 1
         return tree_ids
-
+    
     def __is_number_str(self, s):
         """Check if a string represents a valid number (handles decimals and commas)."""
         s_clean = s.replace(',', '')  # Remove commas from numbers
@@ -175,9 +174,8 @@ class Tools():
         if amp_value: ret["amp_value"] = amp_value
         if tolerance_value: ret["tolerance"] = tolerance_value
         return ret
-        
-    # kept for backwards compability with component templates
-    def splitUnits(self, str: str):
+    
+    def splitUnits(self, str):
         # Splits given string into value (with SI scalar) and a unit
         scalars = ["G", "M", "k", "m", "u", "μ", "n", "p"]
     
@@ -193,12 +191,6 @@ class Tools():
                 print("Invalid input format! The string contains more than one scalar.")
                 return None, None
         else:  # This is for values like 15R or 5F, where no scalar is found
-            if "ohm" in str.lower():
-                value = str[:-3]
-                unit = "ohm"
-            if "r" in str.lower():
-                value = str[:-1]
-                unit = "ohm"
             if len(str) > 1:
                 value = str[:-1]  # All characters except the last
                 unit = str[-1:]  # Last character
@@ -208,11 +200,11 @@ class Tools():
 
         # Clean up extra spaces from value and unit
         value = value.replace(" ", "")
-        unit = unit.replace(" ", "").capitalize()
+        unit = unit.replace(" ", "")
 
         return value, unit
     
-    def inputWithPrefill(self, prompt, text) -> str:
+    def input_with_prefill(self, prompt, text) -> str:
         def hook():
             readline.insert_text(text)
             readline.redisplay()
@@ -221,7 +213,7 @@ class Tools():
         readline.set_pre_input_hook()
         return result
     
-    def findPartTemplate(self, template, templates):
+    def find_part_template(self, template: str, templates: list[PartCategory]) -> PartCategory | None:
         try:
             partTemplate = get_close_matches(template, [i.name for i in templates], n=1, cutoff=0.85)[0]
             # now get the part object that has the same name as the template
@@ -229,7 +221,23 @@ class Tools():
         except IndexError:
             partTemplate = None
         return partTemplate
-    
+
+    def find_part(self, partNumber: str, parts: list[Part], partName: str = None) -> int | None:
+        for part in parts:
+            # print(f"Checking part: {part.name} with keywords: {part.keywords}")
+            # First we try to find the exact match of partNumber in the keywords of the parts
+            if partNumber.lower() in (part.keywords or "").lower():
+                return part.pk
+        
+        # If no exact match is found, we try to find a close match of the part name
+        if partName:
+            close_matches = get_close_matches(partName, [part.name for part in parts], n=1, cutoff=0.85)
+            if close_matches:
+                return next((part.pk for part in parts if part.name == close_matches[0]), None)
+            
+        # If no match is found, return None
+        return None
+
     def read_barcodes(self, frame):
         font = cv2.FONT_HERSHEY_DUPLEX
         barcode_infos = []
@@ -253,34 +261,7 @@ class Tools():
 
         return frame, barcode_infos
     
-    def createCategoryTree(self, api: InvenTreeAPI) -> tuple[PartCategory, Node]:
-        categories = PartCategory.list(api)
-        # iterate over all categories and create a hierarchical tree
-        print("Creating category tree...")
-        category_tree_root = Node("root")
-        for i in categories:
-            parent = i.getParentCategory()
-            if parent == None:
-                Node(i.pk, parent=category_tree_root)
-            else:
-                # find the parent category in the tree
-                res = search.findall(category_tree_root, filter_=lambda node: str(node.name) == str(parent.pk), maxcount=1)[0]
-                Node(i.pk, parent=res)
-        
-        return categories, category_tree_root
-
-    def createLocationTree(self, api: InvenTreeAPI) -> tuple[StockLocation, Node]:
-        locations = StockLocation.list(api)
-        print("Creating location tree...")
-        location_tree_root = Node("root")
-        for i in locations:
-            parent = i.getParentLocation()
-            if parent == None:
-                Node(i.pk, parent=location_tree_root)
-            else:
-                # find the parent category in the tree
-                res = search.findall(location_tree_root, filter_=lambda node: str(node.name) == str(parent.pk), maxcount=1)[0]
-                Node(i.pk, parent=res)
-
-        return locations, location_tree_root
-        
+class DuplicateChoice(Enum):
+    ADD_STOCK = auto()
+    SKIP = auto()
+    CREATE_NEW = auto()

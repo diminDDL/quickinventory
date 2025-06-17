@@ -15,7 +15,7 @@ class LCSC(baseSupplier):
     """Supplier implementation for LCSC Electronics (https://www.lcsc.com/)"""
 
     def __init__(self, utils: Tools, config):
-        self.LCSC_NUM = re.compile('pc:(C\d*)')
+        self.LCSC_NUM = re.compile(r'pc:(C\d*)')
         self.utils = utils
         self.headers = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 uacq'}
         self.session = HTMLSession()
@@ -58,7 +58,8 @@ class LCSC(baseSupplier):
                 table = sel.xpath(specification_table_path)
                 
                 if not table:
-                    raise Exception(f"Product specifications table not found! xpath={specification_table_path}")
+                    raise Exception()
+                    #raise Exception(f"Product specifications table not found! xpath={specification_table_path}")
 
                 # Scrape parameters from the specification table 
                 rows = table[0].xpath(".//tbody/tr")
@@ -85,6 +86,7 @@ class LCSC(baseSupplier):
                     remote_image = data["image"],
                     link = response.url,
                     unit_price = float(data["offers"]["price"]),
+                    keywords= f"{partNumber}, {data["mpn"]}",
                     # Backwards compatibility with component templates 
                     package = re.sub(' +', ' ', self.utils.cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]/div/span").get()).strip())
                 )    

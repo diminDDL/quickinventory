@@ -51,6 +51,10 @@ class TME(baseSupplier):
         price = self.__getProductPrice(part_number)
         params = self.__getProductParams(part_number)
 
+        if None in [details, price, params]:
+            click.secho(f"No data found!")
+            return None
+
         product_details = details["Data"]["ProductList"][0]
         product_prices = price["Data"]["ProductList"][0]["PriceList"]
 
@@ -60,12 +64,13 @@ class TME(baseSupplier):
             name = product_details["OriginalSymbol"],
             description = product_details["Description"],
             parameters = self._mapParameters(params["Data"]["ProductList"][0]["ParameterList"]),
-            template_description = product_details["Category"],
+            template_description = product_details["Description"],
             remote_image = f"https:{product_details["Photo"]}",
             link = f"https:{product_details["ProductInformationPage"]}",
             unit_price = (min(product_prices, key=lambda item: item["Amount"], default=None) or {"PriceValue": 0})["PriceValue"],
+            keywords= f"{product_details["Symbol"]}, {product_details["OriginalSymbol"]}",
             # Backwards compatibility with component templates 
-            package = 0,
+            package = next((param["ParameterValue"] for param in params["Data"]["ProductList"][0]["ParameterList"] if param["ParameterId"] in [35, 2931]), ""),
         )
 
     def __getProductDetails(self, part_number):
