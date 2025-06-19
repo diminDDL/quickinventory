@@ -136,6 +136,7 @@ def main():
 
     try:
         while True:
+            # TODO: LCSC parameter mapping isn't implemented
             # TODO: add ability to type category and auto complete for it
             # TODO: find_part() could use Part.list(api, name_regex=) method
             # TODO: move to click library instead of While loops everywhere
@@ -149,7 +150,6 @@ def main():
             # Integrate part templates with base PartData class and editing menu
             # If template is empty skip searching for it and assume the user doesn't want one
 
-            # Get part data
             clear_screen()
             part_data = get_part_data(cam, utils, supplier)
 

@@ -239,9 +239,17 @@ class Tools():
         return None
 
     def read_barcodes(self, frame):
+        """
+        Scan an image frame for both DataMatrix and standard barcodes/QR codes,
+        draw bounding boxes and decoded text on the frame, and return all decoded values.
+
+        :param frame: BGR image (numpy array) from OpenCV
+        :return: Tuple of (annotated_frame, list_of_barcode_strings)
+        """
         font = cv2.FONT_HERSHEY_DUPLEX
         barcode_infos = []
 
+        # Decode DataMatrix codes via pylibdmtx
         dm_barcodes = pylibdmtx.decode(frame, timeout=10)
         for dm_barcode in dm_barcodes:
             barcode_data = dm_barcode.data.decode('utf-8')
@@ -250,6 +258,7 @@ class Tools():
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.putText(frame, barcode_data, (x + 6, y - 6), font, 2.0, (255, 255, 255), 1)
 
+        # Decode barcodes & QR codes via pyzbar
         standard_barcodes = pyzbar.decode(frame)
         for barcode in standard_barcodes:
             if barcode.type != 'DATAMATRIX':

@@ -18,23 +18,29 @@ def handle_parameters(api: InvenTreeAPI):
             ParameterTemplate.create(api, tmp)
     
 def handle_template_creation(api: InvenTreeAPI, utils: Tools, part_data: PartData, category_pk: int, location_pk: int) -> PartData:
-    # First we generate a name for the template
+    """
+    Build or select a part template based on scanned part data.
+    """
+    # Parse component info (e.g. values for resistor, capacitor, inductor)
     info = utils.parseComponent(part_data.description)
     template_data = {}
 
+    # Pull the "Package" parameter if available
     package = next((param.value[0] for param in part_data.parameters if param.name == "Package"), "")
 
-    # construct template using: <value> <package> <voltage rating (for capacitors)>/<power rating (for resistors)>/<curent>
-    # in one line we check if this is a resistor or a capacitor, we check it depending on if res_value or cap_value keys are present in the info
+    # Build a default template name depending on component type
     if "res_value" in info and "ind_value" not in info:
-        template = info["res_value"] + " " + package + " " + (info["power_value"] if "power_value" in info else "")
+        # Resistive part: value + package + optional power rating
+        template = f"{info['res_value']} {package} {info.get('power_value', '')}"
     elif "cap_value" in info:
-        template = info["cap_value"] + " " + package + " " + (info["volt_value"] if "volt_value" in info else "")
+        # Capacitive part: value + package + optional voltage rating
+        template = f"{info['cap_value']} {package} {info.get('volt_value', '')}"
     elif "ind_value" in info:
-        template = info["ind_value"] + " " + package + " " + (info["amp_value"] if "amp_value" in info else "")
+        # Inductive part: value + package + optional current rating
+        template = f"{info['ind_value']} {package} {info.get('amp_value', '')}"
     else:
+        # Unknown component: start with empty name
         template = ""
-    
     template = template.strip()
 
     # Present the user with the template we created and ask for confirmation/editing
@@ -43,15 +49,15 @@ def handle_template_creation(api: InvenTreeAPI, utils: Tools, part_data: PartDat
     print("Confirm/enter the template: ")
     template_data["name"] = utils.input_with_prefill(text=template, prompt="")
     
-    
     # Get a list of existing templates
     templates = Part.list(api, is_template=True)
     # find if an existing template exists
     existing_template = utils.find_part_template(template_data["name"], templates)
 
-    # clear_screen()
     use_existing = False
     create_new = False
+
+    # If a template with that name exists, offer to reuse it
     if existing_template:
         print(f"Existing template found: {existing_template.name}. The name you entered: {template_data["name"]}.\nUse this template? (y/n): ")
         use_existing = input().lower() == 'y'
@@ -87,6 +93,7 @@ def handle_template_creation(api: InvenTreeAPI, utils: Tools, part_data: PartDat
             if inp != "":
                 template_data['link'] = inp
 
+    # Return a new PartData object for the template (it ain't much but it's honest work)
     return PartData(
         name = template_data["name"] if "name" in template_data else None,
         supplier_pn = None,
@@ -198,10 +205,10 @@ def select_input_option(utils: Tools) -> str:
 
     if cam_type == "system":
         # Ask which system camera index to use
-        adress = click.prompt("Enter system camera index (e.g. 0 for /dev/video0)", type=int, default=0)
+        address = click.prompt("Enter system camera index (e.g. 0 for /dev/video0)", type=int, default=0)
     else:
         # Ask for the URL
         print("Enter camera URL/IP: ")
-        adress = utils.input_with_prefill(text="http://192.168.100.157:8080/video", prompt="")
+        address = utils.input_with_prefill(text="http://192.168.100.157:8080/video", prompt="")
 
-    return adress
+    return address

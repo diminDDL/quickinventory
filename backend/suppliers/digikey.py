@@ -27,7 +27,9 @@ class DigiKey(baseSupplier):
     def parseCode(self, code: str) -> str:
         if re.match(self.barcode_2d_re, code):
             return code
-
+        elif self.__getProductDetails(code):
+            return code
+        
         return None
 
     def query(self, code) -> PartData:
@@ -58,14 +60,26 @@ class DigiKey(baseSupplier):
         )
 
     def __query2dcode(self, code: str):
-        # https://forum.digikey.com/t/digikey-product-labels-decoding-digikey-barcodes/41097
+        """
+        Decode a 2D label string into manufacturer and supplier part numbers,
+        then fetch full product details using the supplier part number.
+
+        https://forum.digikey.com/t/digikey-product-labels-decoding-digikey-barcodes/41097
+        """
+        # Split segments separated by GS (Group Separator, hex 1D)
         code_segments = code.split("\x1d")
+
+        # Extract manufacturer and supplier segments by prefix
         manufacturer_part_number = next(seg.replace("1P", "") for seg in code_segments if seg.startswith("1P"))
         supplier_part_number = next(seg.replace("30P", "") for seg in code_segments if seg.startswith("30P"))
 
         return self.__getProductDetails(supplier_part_number)
 
     def __getProductDetails(self, part_number):
+        """
+        Perform a GET request to DigiKey's productdetails endpoint,
+        refreshing the token if unauthorized.
+        """
         while True:
             product_details_url = f'https://api.digikey.com/products/v4/search/{part_number}/productdetails'
             headers = {
@@ -80,6 +94,7 @@ class DigiKey(baseSupplier):
             if response.status_code == 200:
                 return response.json()
             elif response.status_code == 401 and 'detail' in response.json():
+                # If token expired or invalid, re-request and retry
                 if 'The Bearer token is invalid' in response.json()['detail']:
                     self.__requestBearerToken()
                     continue
@@ -90,6 +105,9 @@ class DigiKey(baseSupplier):
         return None
     
     def __requestBearerToken(self):
+        """
+        Obtain OAuth2 bearer token using client credentials.
+        """
         token_url = 'https://api.digikey.com/v1/oauth2/token'
         data = {'grant_type': 'client_credentials', 'client_id': self.client_id, 'client_secret': self.client_secret}
         response = requests.post(token_url, data=data)

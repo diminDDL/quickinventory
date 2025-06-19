@@ -13,21 +13,19 @@ from backend.utilities import Tools
 from backend.tree_utilities import select_from_tree
 
 # Define valid part parameters
-# TODO maybe some mapping? For example Digikey and LCSC might have a slightly different
-# (or just ugly) names for the same parameters. Ig it could be done on supplier class level.
 VALID_PART_PARAMETERS = {
-    "Resistance": "ohm",                # TODO LCSC Mapping (Thermistors have @25*C or sth)
-    "Power Rating": "W",                # TODO LCSC Mapping (Transistors)
+    "Resistance": "ohm",                
+    "Power Rating": "W",                
     "Capacitance": "F",
     "Inductance": "H",
     "Voltage Rating": "V",
-    "Forward Voltage": "V",             # TODO LCSC Mapping
+    "Forward Voltage": "V",             
     "Drain to Source Voltage": "V",
-    "Collector to Emitter Voltage": "V",# TODO LCSC Mapping
-    "Current Rating": "A",              # TODO LCSC Mapping (Transistors)
-    "Reverse Leackage Current": "A",    # TODO LCSC Mapping
-    "Saturation Current": "A",          # TODO LCSC Mapping
-    "ESR": "ohm",                       # TODO LCSC Mapping
+    "Collector to Emitter Voltage": "V",
+    "Current Rating": "A",              
+    "Reverse Leakage Current": "A",    
+    "Saturation Current": "A",          
+    "ESR": "ohm",                       
     "Tolerance": "%",
     "Package": None,
     "Temperature Coefficient": None
@@ -104,20 +102,26 @@ class PartData:
     remote_image: str               # URL to the part's main image
     link: str                       # URL to the part's product page
     unit_price: float               # Price per single unit
-    minimum_stock: int       
-    part_count: int       
-    note: str
+    minimum_stock: int              # Minimum quantity to maintain in stock
+    part_count: int                 # Quantity to initially stock or add
+    note: str                       # Any additional note or comment about the part
     parameters: list[Parameter]     # List of technical parameters
     keywords: str = ""              # Comma-separated keywords for search
-    category_pk: int = None 
-    location_pk: int = None
-    part_pk: int = None 
-    is_template: bool = False
+    category_pk: int = None         # Category ID to classify the part 
+    location_pk: int = None         # Storage location ID
+    part_pk: int = None             # Existing part template key
+    is_template: bool = False       # Flag marking this data as a template
 
     def create(self, api, template_pk = None):
+        """
+        Create a new part or template in the InvenTree system.
+        Returns the primary key of the new or existing part.
+        """
         args = {}
 
+        # If creating a template part
         if self.is_template:
+            # If already existing template was assigned return it's pk
             if self.part_pk: return self.part_pk
             
             args['name'] = self.name
@@ -128,12 +132,12 @@ class PartData:
             args['is_template'] = True
 
             if self.remote_image: args['remote_image'] = self.remote_image
-            if self.minimum_stock: args['remotminimum_stocke_image'] = self.minimum_stock
+            if self.minimum_stock: args['minimum_stock'] = self.minimum_stock
             if self.note: args['note'] = self.note
             if self.link: args['link'] = self.link
 
+        # Creating a regular part (possibly a variant)
         else:
-
             args['name'] = self.name
             args['description'] = self.description
             args['link'] = self.link
@@ -160,6 +164,10 @@ class PartData:
         return part.pk
 
     def add_parameters(self, api: InvenTreeAPI, part: Part):
+        """
+        Iterate through all available parameter templates and add matching
+        parameters to the newly created part.
+        """
         print("Adding parameters...")
         for template in ParameterTemplate.list(api):
             for param in self.parameters:

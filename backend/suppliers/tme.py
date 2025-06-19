@@ -8,10 +8,9 @@ import click
 import urllib
 
 import requests
-from backend.base import Parameter, PartData, baseSupplier
 from backend.file import fileHandler
 from backend.utilities import Tools
-
+from backend.base import Parameter, PartData, baseSupplier
 
 class TME(baseSupplier):
     def __init__(self,  utils: Tools, config):
@@ -28,6 +27,7 @@ class TME(baseSupplier):
             sys.exit(0)
 
     def parseCode(self, code: str) -> str:
+        # Attempt simple regex match
         try:
             TMEPartNumber = re.search(self.TME_NUM, code)
             TMEPartNumber = str(TMEPartNumber.group(1)).strip()
@@ -37,6 +37,7 @@ class TME(baseSupplier):
                 return None
             
             return TMEPartNumber
+        # If regex fails, try API lookup for detailed product data
         except:
             details = self.__getProductDetails(code)
             if details != None:
@@ -51,6 +52,7 @@ class TME(baseSupplier):
         price = self.__getProductPrice(part_number)
         params = self.__getProductParams(part_number)
 
+        # Abort if any API call failed
         if None in [details, price, params]:
             click.secho(f"No data found!")
             return None
@@ -74,6 +76,7 @@ class TME(baseSupplier):
         )
 
     def __getProductDetails(self, part_number):
+        # Call the TME GetProducts endpoint
         response = self.__makeRequest("GetProducts", part_number)
 
         if response.status_code == 200:
@@ -82,6 +85,7 @@ class TME(baseSupplier):
             return None
 
     def __getProductParams(self, part_number):
+        # Call the TME GetParameters endpoint
         response = self.__makeRequest("GetParameters", part_number)
 
         if response.status_code == 200:
@@ -90,6 +94,7 @@ class TME(baseSupplier):
             return None
         
     def __getProductPrice(self, part_number):
+        # Call the TME GetPrices endpoint
         response = self.__makeRequest("GetPrices", part_number)
 
         if response.status_code == 200:
@@ -98,6 +103,9 @@ class TME(baseSupplier):
             return None
         
     def __makeRequest(self, url_dir, part_number):
+        """
+        Compose and send a signed POST request to the TME API.
+        """
         url = f'https://api.tme.eu/Products/{url_dir}.json'
         data = {
             'Token': self.token,
@@ -108,6 +116,7 @@ class TME(baseSupplier):
             #'GrossPrices': 'true' - Gross prices are available for anonymous request only
         }
 
+        # Append the OAuth-style signature
         data['ApiSignature'] = self.__getSignature(url, data)
 
         response = requests.post(url, data=data)
@@ -115,6 +124,10 @@ class TME(baseSupplier):
     
 
     def __getSignature(self, url: str, req_data: str):
+        """
+        Generate HMAC-SHA1 signature for TME API authentication.
+        Uses base64-encoded HMAC of the OAuth base string.
+        """
         base_string = f'POST&{urllib.parse.quote(url, safe="")}&{urllib.parse.quote(urllib.parse.urlencode(sorted(req_data.items())), safe="")}'
         key = self.secret.encode('utf-8')
         message = base_string.encode('utf-8')
@@ -164,6 +177,9 @@ class TME(baseSupplier):
         
 
     def __resolveMultipleProducts(self, products):
+        """
+        Prompt the user to disambiguate when multiple products match a code.
+        """
         click.secho("Given part number resulted in multiple products found!", fg="bright_yellow")
         for idx, product in enumerate(products):
             click.echo(f"{idx}. {product["Symbol"]}")
