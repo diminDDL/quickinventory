@@ -59,18 +59,18 @@ class TME(baseSupplier):
         product_prices = price["Data"]["ProductList"][0]["PriceList"]
 
         return PartData(
+            name = product_details["OriginalSymbol"],
             supplier_pn = product_details["Symbol"],
             manufacturer_pn = product_details["OriginalSymbol"],
-            name = product_details["OriginalSymbol"],
             description = product_details["Description"],
-            parameters = self._mapParameters(params["Data"]["ProductList"][0]["ParameterList"]),
-            template_description = product_details["Description"],
             remote_image = f"https:{product_details["Photo"]}",
             link = f"https:{product_details["ProductInformationPage"]}",
             unit_price = (min(product_prices, key=lambda item: item["Amount"], default=None) or {"PriceValue": 0})["PriceValue"],
+            parameters = self._mapParameters(params["Data"]["ProductList"][0]["ParameterList"]),
             keywords= f"{product_details["Symbol"]}, {product_details["OriginalSymbol"]}",
-            # Backwards compatibility with component templates 
-            package = next((param["ParameterValue"] for param in params["Data"]["ProductList"][0]["ParameterList"] if param["ParameterId"] in [35, 2931]), ""),
+            minimum_stock = None,
+            part_count = None,
+            note = None 
         )
 
     def __getProductDetails(self, part_number):

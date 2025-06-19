@@ -1,13 +1,11 @@
 import click
-from anytree import Node, search
 from inventree.api import InvenTreeAPI
-from inventree.part import PartCategory, Part, ParameterTemplate, Parameter
-from inventree.stock import StockLocation
+from inventree.part import Part, ParameterTemplate, Parameter
 from backend.base import VALID_PART_PARAMETERS, PartData
 from backend.utilities import Tools
 from backend.utilities import DuplicateChoice as PartDupChoice
 
-def validate_parameters(api: InvenTreeAPI, part_data: PartData):
+def handle_parameters(api: InvenTreeAPI):
     existing_templates = {template["name"] for template in ParameterTemplate.list(api)}
 
     if any(template not in existing_templates for template in VALID_PART_PARAMETERS):
@@ -18,104 +16,22 @@ def validate_parameters(api: InvenTreeAPI, part_data: PartData):
         if key not in existing_templates:
             tmp = {"name": key, "units": "" if VALID_PART_PARAMETERS[key] is None else VALID_PART_PARAMETERS[key]}
             ParameterTemplate.create(api, tmp)
-
-
-    print("The following parameters were found:")
-    click.secho(f"{'Parameter':<25} {'Value':>20} {'Unit':>11}", bold=True)
-    for param in part_data.parameters:
-        unit = param.value[1] if param.value[1] else "-"
-        print(f"{param.name:<{25}} {param.value[0]:>{20}} {unit:>{10}}")
-
-    if click.confirm("\nWould you like to edit the parameters?", default=False):
-        part_data.edit_parameters()
     
-    return part_data
-
-def add_parameters(api: InvenTreeAPI, part: Part, part_data: PartData):
-    print("Adding parameters...")
-    for template in ParameterTemplate.list(api):
-        for param in part_data.parameters:
-            if param.name != template["name"]:
-                continue
-            Parameter.create(api, {'part':part.pk, 'template': template.pk, 'data': param.value[0]})
-            break
-
-def build_category_tree(api: InvenTreeAPI) -> Node:
-    categories = PartCategory.list(api)
-    category_tree_root = Node("root")
-    for i in categories:
-        parent = i.getParentCategory()
-        parent_node = search.findall(category_tree_root, filter_=lambda node: str(node.name) == str(parent.pk), maxcount=1) if parent else [category_tree_root]
-        Node(i.pk, parent=parent_node[0])
-    return category_tree_root
-
-def build_location_tree(api: InvenTreeAPI) -> Node:
-    locations = StockLocation.list(api)
-    location_tree_root = Node("root")
-    for i in locations:
-        parent = i.getParentLocation()
-        parent_node = search.findall(location_tree_root, filter_=lambda node: str(node.name) == str(parent.pk), maxcount=1) if parent else [location_tree_root]
-        Node(i.pk, parent=parent_node[0])
-    return location_tree_root
-
-def select_from_tree(utils: Tools, tree_root: Node, items: tuple, tree_type="category") -> int:
-    tree_ids = utils.drawTree(tree_root, items)
-    while True:
-        try:
-            print(f"Please select the {tree_type} for the new part:")
-            selected_id = tree_ids[int(input())][1][0]  # User selects by index
-            item_pk = [item.pk for item in items if str(item.pk) == str(selected_id)][0]
-            item_name = [item.name for item in items if item.pk == item_pk][0]
-            print(f"Selected {tree_type}: {item_name} (pk: {item_pk})")
-            return item_pk
-        except (ValueError, IndexError):
-            # clear_screen()
-            print(f"Invalid selection. Please enter a number corresponding to a {tree_type}.")
-
-def create_part(api: InvenTreeAPI, category_pk: int, location_pk: int, part_data: PartData, variant_of = None, part_count: int = 0, minimal_stock: int = 0) -> None:
-    args = {
-        'name': part_data.name,
-        'description': part_data.description,
-        'link': part_data.link,
-        'category': category_pk,
-        'default_location': location_pk,
-        'keywords' : part_data.keywords,
-        'component': True,
-        'is_template': False
-    }
-    
-    if part_data.remote_image != "":
-        args['remote_image'] = part_data.remote_image
-
-    if variant_of:
-        args['variant_of'] = variant_of
-
-    if part_count > 0:
-        args['initial_stock'] = {'quantity': part_count, 'location': location_pk}
-
-    if minimal_stock > 0:
-        args['minimum_stock'] = minimal_stock
-
-    if click.confirm("Would you like to set the MPN as Internal Part Number?", default=True):
-        args["IPN"] = part_data.manufacturer_pn
-
-    # Additional logic for setting template, minimum stock, etc., as needed
-    part = Part.create(api, args)
-    add_parameters(api, part, part_data)
-    print(f"Part created: {part.name} (pk: {part.pk})")
-
-def handle_template_creation(api: InvenTreeAPI, utils: Tools, part_data: PartData, category_pk: int, location_pk: int, part_categories = None, part_locations = None) -> int | None:
+def handle_template_creation(api: InvenTreeAPI, utils: Tools, part_data: PartData, category_pk: int, location_pk: int) -> PartData:
     # First we generate a name for the template
     info = utils.parseComponent(part_data.description)
+    template_data = {}
+
+    package = next((param.value[0] for param in part_data.parameters if param.name == "Package"), "")
 
     # construct template using: <value> <package> <voltage rating (for capacitors)>/<power rating (for resistors)>/<curent>
     # in one line we check if this is a resistor or a capacitor, we check it depending on if res_value or cap_value keys are present in the info
     if "res_value" in info and "ind_value" not in info:
-        template = info["res_value"] + " " + part_data.package + " " + (info["power_value"] if "power_value" in info else "")
+        template = info["res_value"] + " " + package + " " + (info["power_value"] if "power_value" in info else "")
     elif "cap_value" in info:
-        template = info["cap_value"] + " " + part_data.package + " " + (info["volt_value"] if "volt_value" in info else "")
+        template = info["cap_value"] + " " + package + " " + (info["volt_value"] if "volt_value" in info else "")
     elif "ind_value" in info:
-        template = info["ind_value"] + " " + part_data.package + " " + (info["amp_value"] if "amp_value" in info else "")
+        template = info["ind_value"] + " " + package + " " + (info["amp_value"] if "amp_value" in info else "")
     else:
         template = ""
     
@@ -125,73 +41,69 @@ def handle_template_creation(api: InvenTreeAPI, utils: Tools, part_data: PartDat
     print("Part name: " + part_data.name)
     print("Part link: " + part_data.link)
     print("Confirm/enter the template: ")
-    template = utils.input_with_prefill(text=template, prompt="")
+    template_data["name"] = utils.input_with_prefill(text=template, prompt="")
     
     
     # Get a list of existing templates
     templates = Part.list(api, is_template=True)
     # find if an existing template exists
-    existing_template = utils.find_part_template(template, templates)
+    existing_template = utils.find_part_template(template_data["name"], templates)
 
     # clear_screen()
     use_existing = False
     create_new = False
     if existing_template:
-        print(f"Existing template found: {existing_template.name}. The name you entered: {template}.\nUse this template? (y/n): ")
+        print(f"Existing template found: {existing_template.name}. The name you entered: {template_data["name"]}.\nUse this template? (y/n): ")
         use_existing = input().lower() == 'y'
     else:
         print("No existing template found. Create a new one? (y/n): ")
         create_new = input().lower() == 'y'
 
     if use_existing:
-        template_pk = existing_template.pk
+        template_data["part_pk"] = existing_template.pk
     elif create_new:
-        while True:
-            # Gather additional information for template creation here
-            template_args = {
-                'name': template,
-                'description': part_data.template_description,
-                'category': category_pk,
-                'default_location': location_pk,
-                'component': True,
-                'is_template': True
-            }
-            print("Would you like to provide additional information? (y/n)")
-            additional_info = input().lower() == 'y'
-            if additional_info:
-                print("Please enter the image link (enter to skip):")
-                inp = input()
-                if inp != "":
-                    template_args['remote_image'] = inp
-                print("Please enter the minimum stock value (enter to skip):")
-                inp = input()
-                if inp != "":                    
-                    template_args['minimum_stock'] = int(inp)
-                print("Please enter the note (enter to skip):")
-                inp = input()
-                if inp != "":
-                    template_args['note'] = inp
-                print("Please enter the link (enter to skip):")
-                inp = input()
-                if inp != "":
-                    template_args['link'] = inp
+        # Gather additional information for template creation here
+        template_data["description"] = part_data.description
+        template_data["category_pk"] = category_pk
+        template_data["location_pk"] = location_pk
 
-            print("Template information:") 
-            for key, value in template_args.items():
-                if key == "category" and part_categories:
-                    value = [elem for elem in part_categories if elem.pk == value][0].name
-                elif key == "default_location" and part_locations:
-                    value = [elem for elem in part_locations if elem.pk == value][0].name
-                print(f"{key}: {value}")
-            print("Confirm template information? (y/n)")
+        print("Would you like to provide additional information? (y/n)")
+        additional_info = input().lower() == 'y'
+        if additional_info:
+            print("Please enter the image link (enter to skip):")
+            inp = input()
+            if inp != "":
+                template_data['remote_image'] = inp
+            print("Please enter the minimum stock value (enter to skip):")
+            inp = input()
+            if inp != "":                    
+                template_data['minimum_stock'] = int(inp)
+            print("Please enter the note (enter to skip):")
+            inp = input()
+            if inp != "":
+                template_data['note'] = inp
+            print("Please enter the link (enter to skip):")
+            inp = input()
+            if inp != "":
+                template_data['link'] = inp
 
-            if input() == "y":
-                template = Part.create(api, template_args)
-                template_pk = template.pk
-                break
-    else:
-        return None
-    return template_pk
+    return PartData(
+        name = template_data["name"] if "name" in template_data else None,
+        supplier_pn = None,
+        manufacturer_pn = None,
+        description = template_data["description"] if "description" in template_data else None,
+        remote_image = template_data["remote_image"] if "remote_image" in template_data else None,
+        link = template_data["link"] if "link" in template_data else None,
+        unit_price = None,
+        minimum_stock = template_data["minimum_stock"] if "minimum_stock" in template_data else None,
+        note = template_data["note"] if "note" in template_data else None,
+        parameters = None,
+        keywords = None,
+        category_pk = category_pk,
+        location_pk = location_pk,
+        part_pk = template_data["part_pk"] if "part_pk" in template_data else None,
+        is_template = True
+    )
 
 def handle_part_quantity() -> int:
     return click.prompt(

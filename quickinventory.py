@@ -5,28 +5,27 @@ import click
 import cv2
 import requests
 from getpass import getpass
+from backend.utilities import Tools
+from backend.file import fileHandler
 from inventree.api import InvenTreeAPI
 from inventree.part import PartCategory, Part
 from inventree.stock import StockLocation
 from backend.base import PartData, baseSupplier
-from backend.file import fileHandler
-from backend.utilities import Tools
 from backend.utilities import DuplicateChoice as PartDupChoice
 
-import backend.suppliers.lcsc
-import backend.suppliers.digikey
-import backend.suppliers.tme
+from backend.suppliers.lcsc import LCSC
+from backend.suppliers.digikey import DigiKey
+from backend.suppliers.tme import TME
 
 from backend.ui_utilities import *
+from backend.tree_utilities import *
 
 debug = False  # Set to True for debugging output
 
-utils = Tools()
-
 suppliers = {
-    "LCSC": backend.suppliers.lcsc.LCSC,          # QR code
-    "DigiKey": backend.suppliers.digikey.DigiKey, # Data Matrix ECC 200
-    "TME": backend.suppliers.tme.TME              # QR code
+    "LCSC": LCSC,           # QR code
+    "DigiKey": DigiKey,     # Data Matrix ECC 200
+    "TME": TME              # QR code
 }
 
 def clear_screen() -> None:
@@ -79,7 +78,7 @@ def get_part_data(cam, utils: Tools, supplier: baseSupplier) -> PartData:
         print(f"Parsed {part_data.link}")
         return part_data
 
-def run_scanner(utils: backend.utilities.Tools, supplier: baseSupplier, adress: str) -> Part:
+def run_scanner(utils: Tools, supplier: baseSupplier, adress: str) -> Part:
     code = None
 
     camera = cv2.VideoCapture(adress)
@@ -125,7 +124,8 @@ def main():
     category_tree_root = build_category_tree(api)
     location_tree_root = build_location_tree(api)
 
-    use_parameters = click.confirm( "Would you like to use part parameters instead of templates?", default=True, show_default=True)
+    use_parameters = click.confirm("Would you like to use part parameters?", default=True)
+    use_template = click.confirm("Would you like to use part templates?", default=False)
     clear_screen()
 
     supplier = select_supplier(suppliers, utils, config)
@@ -136,12 +136,12 @@ def main():
 
     try:
         while True:
-            # TODO: change this to support different suppliers
-            # TODO: clear screens more aggressively
             # TODO: add ability to type category and auto complete for it
             # TODO: find_part() could use Part.list(api, name_regex=) method
+            # TODO: move to click library instead of While loops everywhere
 
             # FIXME:
+            # handle_template_creation wih get_close_matches mixes up parts and there is no way to confirm besides ID
             # If a part exists but there are no stock items it will crash
             # Check if part exists before creating template maybe?
             # If saying no to an existing template something weird happens it just continues to part creation
@@ -150,6 +150,7 @@ def main():
             # If template is empty skip searching for it and assume the user doesn't want one
 
             # Get part data
+            clear_screen()
             part_data = get_part_data(cam, utils, supplier)
 
             part_categories = PartCategory.list(api)
@@ -157,20 +158,26 @@ def main():
             part_list = Part.list(api)
 
             category_pk = select_from_tree(utils, category_tree_root, part_categories, tree_type="category")
+            part_data.category_pk = category_pk
             clear_screen()
             location_pk = select_from_tree(utils, location_tree_root, part_locations, tree_type="location")
+            part_data.location_pk = location_pk
             clear_screen()
 
-            variant_of = None
+            template_pk = None
 
             if use_parameters:
-                part_data = validate_parameters(api, part_data)
-            else:
-                variant_of = handle_template_creation(api, utils, part_data, category_pk, location_pk, part_categories, part_locations)
+                handle_parameters(api)
             
-            clear_screen()
+            if use_template:
+                template_data = handle_template_creation(api, utils, part_data, category_pk, location_pk)
+                template_data.pretty_print(part_categories, part_locations)
+                if click.confirm("Would you like to change any of the part template values?", default=False):
+                    template_data.interactive_edit(utils, category_tree_root, part_categories, category_tree_root, part_locations)
 
-            #part_data.interactive_edit(utils)
+                part_data.part_pk = template_data.create(api)
+  
+            clear_screen()
 
             choice, existing_part_pk = handle_existing_part(utils, part_data.supplier_pn, part_list, part_data.name)
             match choice:
@@ -186,20 +193,18 @@ def main():
                 case PartDupChoice.CREATE_NEW:
                     print("Creating new part...")
             
-            part_count = handle_part_quantity()
-            minimal_stock = handle_minimal_stock()
-            unit_price = handle_parts_price(part_count, part_data.unit_price)
+            part_data.part_count = handle_part_quantity()
+            part_data.minimum_stock = handle_minimal_stock()
+            unit_price = handle_parts_price(part_data.part_count, part_data.unit_price)
             if unit_price > 0.0:
                 part_data.unit_price = unit_price
 
-            part_data.pretty_print()
-            choice = click.confirm( "Would you like to change any of the values?", default=False)
-            if choice:
-                part_data.interactive_edit(utils)
-                
-            clear_screen()
+            part_data.pretty_print(part_categories, part_locations)
+            if click.confirm( "Would you like to change any of the values?", default=False):
+                part_data.interactive_edit(utils, category_tree_root, part_categories, category_tree_root, part_locations)
 
-            create_part(api, category_pk, location_pk, part_data, variant_of, part_count, minimal_stock)
+            part_data.create(api, template_pk)
+
             # Add more functionality as needed
     except KeyboardInterrupt:
         print("Shutdown requested...exiting")

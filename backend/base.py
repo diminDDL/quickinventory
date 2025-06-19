@@ -3,7 +3,14 @@ import click
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
+from anytree import Node
+from inventree.api import InvenTreeAPI
+from inventree.part import Parameter as InvParameter
+from inventree.part import Part, PartCategory, ParameterTemplate
+from inventree.stock import StockLocation
+
 from backend.utilities import Tools
+from backend.tree_utilities import select_from_tree
 
 # Define valid part parameters
 # TODO maybe some mapping? For example Digikey and LCSC might have a slightly different
@@ -62,6 +69,10 @@ class Parameter:
 
             # Should be rewritten but it's re-using functions kept for backwards compatibility with component templates
             ret = utils.parseComponent(self.value_str)
+
+            if len(ret) == 0:
+                raise Exception(f"Parsing component value failed! Failed string: {self.value_str}")
+
             values = list(ret.values())
 
             if len(values) > 1:
@@ -86,54 +97,127 @@ class Parameter:
 
 @dataclass
 class PartData:
-    supplier_pn: str             # Supplier's part number
-    manufacturer_pn: str         # Manufacturer's part number
-    name: str                    # Display name of the part
-    description: str             # Detailed description of the part
-    parameters: list[Parameter]  # List of technical parameters
-    template_description: str    # Description for part templates
-    remote_image: str            # URL to the part's main image
-    link: str                    # URL to the part's product page
-    unit_price: float            # Price per single unit
-    package: str                 # Physical package type
-    keywords: str = ""           # Comma-separated keywords for search
+    name: str                       # Display name of the part
+    supplier_pn: str                # Supplier's part number
+    manufacturer_pn: str            # Manufacturer's part number
+    description: str                # Detailed description of the part
+    remote_image: str               # URL to the part's main image
+    link: str                       # URL to the part's product page
+    unit_price: float               # Price per single unit
+    minimum_stock: int       
+    part_count: int       
+    note: str
+    parameters: list[Parameter]     # List of technical parameters
+    keywords: str = ""              # Comma-separated keywords for search
+    category_pk: int = None 
+    location_pk: int = None
+    part_pk: int = None 
+    is_template: bool = False
+
+    def create(self, api, template_pk = None):
+        args = {}
+
+        if self.is_template:
+            if self.part_pk: return self.part_pk
+            
+            args['name'] = self.name
+            args['description'] = self.description
+            args['category'] = self.category_pk
+            args['default_location'] = self.location_pk
+            args['component'] = True
+            args['is_template'] = True
+
+            if self.remote_image: args['remote_image'] = self.remote_image
+            if self.minimum_stock: args['remotminimum_stocke_image'] = self.minimum_stock
+            if self.note: args['note'] = self.note
+            if self.link: args['link'] = self.link
+
+        else:
+
+            args['name'] = self.name
+            args['description'] = self.description
+            args['link'] = self.link
+            args['category'] = self.category_pk
+            args['default_location'] = self.location_pk
+            args['keywords'] = self.keywords
+            args['component'] = True
+            args['is_template'] = False
+
+            if self.part_count > 0: args['initial_stock'] = {'quantity': self.part_count, 'location': self.location_pk}
+
+            if self.remote_image: args['remote_image'] = self.remote_image
+            if self.part_pk: args['variant_of'] = template_pk
+            if self.minimum_stock: args['minimum_stock'] = self.minimum_stock
+            if self.note: args['note'] = self.note
+
+            if click.confirm("Would you like to set the MPN as Internal Part Number?", default=True):
+                args["IPN"] = self.manufacturer_pn
+            
+        print("Creating new part...")
+        part = Part.create(api, args)
+        if self.parameters: self.add_parameters(api, part)
+        print(f"Part created: {part.name} (pk: {part.pk})")
+        return part.pk
+
+    def add_parameters(self, api: InvenTreeAPI, part: Part):
+        print("Adding parameters...")
+        for template in ParameterTemplate.list(api):
+            for param in self.parameters:
+                if param.name != template["name"]:
+                    continue
+                InvParameter.create(api, {'part':part.pk, 'template': template.pk, 'data': param.value[0]})
+                break
+
     
-    def interactive_edit(self, utils: Tools):
-        """Interactive editor for all part data fields"""
+    def interactive_edit(self, utils: Tools, 
+                        category_tree_root: Node, categories: list[PartCategory],
+                        location_tree_root: Node, locations: list[StockLocation]):
+        """Interactive editor for all part data fields with improved UX"""
         # Create a copy of the original data for cancel option
-        original_data = {
-            'supplier_pn': self.supplier_pn,
-            'manufacturer_pn': self.manufacturer_pn,
-            'name': self.name,
-            'description': self.description,
-            'template_description': self.template_description,
-            'remote_image': self.remote_image,
-            'link': self.link,
-            'unit_price': self.unit_price,
-            # TODO the package is here because of the way how the part templates 
-            # are handled but with proper integration it should be changed
-            'package': self.package,    
-            'keywords': self.keywords,
-            'parameters': self.parameters.copy()
-        }
+        original_data = {attr: getattr(self, attr) for attr in vars(self)}
         
+        # Define all editable fields with their metadata
+        field_definitions = [
+            ("Name", "name", str),
+            ("Supplier Part Number", "supplier_pn", str),
+            ("Manufacturer Part Number", "manufacturer_pn", str),
+            ("Description", "description", str),
+            ("Image URL", "remote_image", str),
+            ("Product URL", "link", str),
+            ("Unit Price", "unit_price", float),
+            ("Minimum Stock", "minimum_stock", int),
+             ("Part Count", "part_count", int),
+            ("Note", "note", str),
+            ("Keywords", "keywords", str),
+            ("Parameters", "parameters", None),  # Special handling
+            ("Category", "category_pk", None),   # Special handling
+            ("Location", "location_pk", None),   # Special handling
+        ]
+        
+        if self.is_template and self.part_pk:
+            click.secho("You can't edit existing part template!", fg='bright_yellow', bold=True)
+            return
+
+        # Exclude fields for templates
+        if self.is_template:
+            excluded_fields = ["supplier_pn", "manufacturer_pn", "unit_price", "parameters", "keywords"]
+            field_definitions = [field for field in field_definitions if field[1] not in excluded_fields]
+
         while True:
             os.system(CLR)
-            self.pretty_print()
+            self.pretty_print(categories, locations)
             
             click.secho("\nEDITING MENU", fg='bright_yellow', bold=True)
             click.echo("="*60)
-            click.echo(" 1. Supplier Part Number")
-            click.echo(" 2. Manufacturer Part Number")
-            click.echo(" 3. Name")
-            click.echo(" 4. Main Description")
-            click.echo(" 5. Template Description")
-            click.echo(" 6. Image URL")
-            click.echo(" 7. Product URL")
-            click.echo(" 8. Unit Price")
-            click.echo(" 9. Package")
-            click.echo("10. Keywords")
-            click.echo("11. Parameters")
+            
+            # Display menu items dynamically
+            for idx, (display_name, _, _) in enumerate(field_definitions, 1):
+                # Skip None values for category/location
+                if (display_name == "Category" and self.category_pk is None) or \
+                   (display_name == "Location" and self.location_pk is None):
+                    continue
+                click.echo(f"{idx:>2}. {display_name}")
+            
             click.echo("-"*60)
             click.echo(" s. Save and continue")
             click.echo(" r. Reset all changes")
@@ -142,58 +226,88 @@ class PartData:
             
             choice = click.prompt("Select field to edit", type=str).lower()
             
+            # Action handling
             if choice == 's':
-                return True  # Save changes
+                return True
             elif choice == 'q':
                 if click.confirm("Discard all changes?"):
-                    # Restore original data
-                    for key, value in original_data.items():
-                        setattr(self, key, value)
+                    for attr, value in original_data.items():
+                        setattr(self, attr, value)
                     return False
             elif choice == 'r':
                 if click.confirm("Reset all changes to original values?"):
-                    for key, value in original_data.items():
-                        setattr(self, key, value)
+                    for attr, value in original_data.items():
+                        setattr(self, attr, value)
                     click.secho("✓ All changes reset", fg='green')
                     click.pause()
-            elif choice == '11':
-                self.edit_parameters()
-            elif choice in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']:
-                field_map = {
-                    '1': ('supplier_pn', "Enter new Supplier Part Number"),
-                    '2': ('manufacturer_pn', "Enter new Manufacturer Part Number"),
-                    '3': ('name', "Enter new Part Name"),
-                    '4': ('description', "Enter new Main Description"),
-                    '5': ('template_description', "Enter new Template Description"),
-                    '6': ('remote_image', "Enter new Image URL"),
-                    '7': ('link', "Enter new Product URL"),
-                    '8': ('unit_price', "Enter new Unit Price"),
-                    '9': ('package', "Enter new Package"),
-                    '10': ('keywords', "Enter new Keywords"),
-                }
+            
+            # Field editing
+            elif choice.isdigit():
+                idx = int(choice) - 1
                 
-                field_name, prompt = field_map[choice]
-                current_value = str(getattr(self, field_name))
+                if idx < 0 or idx >= len(field_definitions):
+                    click.secho("Invalid selection!", fg='red')
+                    click.pause()
+                    continue
+                    
+                display_name, attr_name, field_type = field_definitions[idx]
                 
-                # Use prefill input
-                new_value = utils.input_with_prefill(f"{prompt}: ", current_value)
+                # Special handling for parameters
+                if attr_name == "parameters":
+                    self.edit_parameters()
+                    continue
+                    
+                # Special handling for category/location
+                if attr_name in ["category_pk", "location_pk"]:
+                    tree_type = "category" if attr_name == "category_pk" else "location"
+                    tree_root = category_tree_root if tree_type == "category" else location_tree_root
+                    items = categories if tree_type == "category" else locations
+                    new_value = select_from_tree(utils, tree_root, items, tree_type)
+                    setattr(self, attr_name, new_value)
+                    continue
                 
-                # Convert numeric fields
-                if field_name == 'unit_price':
-                    try:
+                # Get current value and prompt
+                current_value = getattr(self, attr_name)
+                prompt = f"Enter new {display_name}"
+                
+                # Handle None values
+                if current_value is None:
+                    if field_type == str:
+                        current_value = ""
+                    elif field_type in [int, float]:
+                        current_value = 0
+                
+                # Get new value with prefill
+                new_value = utils.input_with_prefill(f"{prompt}: ", str(current_value))
+                
+                # Convert and validate
+                try:
+                    if field_type == float:
                         new_value = float(new_value)
-                    except ValueError:
-                        click.secho("Invalid price! Must be a number.", fg='red')
-                        click.pause()
-                        continue
+                    elif field_type == int:
+                        new_value = int(new_value)
+                    # Strings don't need conversion
+                except ValueError:
+                    click.secho(f"Invalid input! Must be a {field_type.__name__}.", fg='red')
+                    click.pause()
+                    continue
                 
-                setattr(self, field_name, new_value)
+                # Set new value
+                setattr(self, attr_name, new_value)
+                click.secho(f"✓ Updated {display_name}", fg='green')
+                click.pause()
+            
             else:
                 click.secho("Invalid selection!", fg='red')
                 click.pause()
 
-    def pretty_print(self):
+    def pretty_print(self, categories: list[PartCategory] = None, 
+                     locations: list[StockLocation] = None):
         """Display all part information in a clean, formatted layout"""
+
+        if self.is_template and self.part_pk:
+            return
+        
         os.system(CLR)
         click.secho("\n" + "="*60, fg='bright_cyan')
         click.secho("PART SUMMARY", fg='bright_cyan', bold=True)
@@ -201,28 +315,60 @@ class PartData:
         
         # Basic information section
         click.secho("\nBasic Information:", fg='bright_yellow', bold=True)
-        click.echo(f"{'Supplier PN:':<20} {click.style(self.supplier_pn, fg='bright_cyan')}")
-        click.echo(f"{'Manufacturer PN:':<20} {self.manufacturer_pn}")
-        click.echo(f"{'Name:':<20} {self.name}")
-        click.echo(f"{'Package:':<20} {self.package}")
-        click.echo(f"{'Unit Price:':<20} {self.unit_price:.6f}")
-        click.echo(f"{'Keywords:':<20} {click.style(self.keywords)}")
+        click.echo(f"{'Name:':<20} {click.style(self.name, fg='bright_cyan')}")
+        if not self.is_template:
+            click.echo(f"{'Supplier PN:':<20} {self.supplier_pn}")
+            click.echo(f"{'Manufacturer PN:':<20} {self.manufacturer_pn}")
+            click.echo(f"{'Unit Price:':<20} {self.unit_price:.6f}")
+            click.echo(f"{'Part Count:':<20} {self.part_count}")
+        click.echo(f"{'Min Stock:':<20} {self.minimum_stock}")
+        
+        # Additional details
+        click.secho("\nDetails:", fg='bright_yellow', bold=True)
+        if not self.is_template:
+            click.echo(f"{'Keywords:':<20} {click.style(self.keywords, fg='magenta')}")
+        click.echo(f"{'Note:':<20} {self.note[:100] + '...' if self.note and len(self.note) > 100 else self.note or 'Not set'}")
         
         # Description section
-        click.secho("\nDescriptions:", fg='bright_yellow', bold=True)
-        click.echo(f"{'Main:':<20} {self.description[:100] + '...' if len(self.description) > 100 else self.description}")
-        click.echo(f"{'Template:':<20} {self.template_description[:100] + '...' if len(self.template_description) > 100 else self.template_description}")
+        click.secho("\nDescription:", fg='bright_yellow', bold=True)
+        desc = self.description[:200] + '...' if self.description and len(self.description) > 200 else self.description or 'Not set'
+        click.echo(desc)
         
         # URLs section
         click.secho("\nURLs:", fg='bright_yellow', bold=True)
-        click.echo(f"{'Image:':<20} {click.style(self.remote_image, fg='bright_blue', underline=True)}")
-        click.echo(f"{'Product:':<20} {click.style(self.link, fg='bright_blue', underline=True)}")
+        click.echo(f"{'Image:':<10} {click.style(self.remote_image, fg='bright_blue', underline=True) if self.remote_image else 'Not set'}")
+        click.echo(f"{'Product:':<10} {click.style(self.link, fg='bright_blue', underline=True) if self.link else 'Not set'}")
         
-        # Parameters section - matches the editing view format
-        click.secho("\nParameters:", fg='bright_yellow', bold=True)
-        self.__display_parameters_table()
+        # Parameters section
+        if not self.is_template and self.parameters:
+            click.secho("\nParameters:", fg='bright_yellow', bold=True)
+            self.__display_parameters_table()
         
-        click.secho("\n" + "="*60, fg='bright_cyan')
+        # Category and location - show names if available
+        click.secho("\nInventory:", fg='bright_yellow', bold=True)
+        category_name = "Not set"
+        if self.category_pk and categories:
+            for cat in categories:
+                if cat.pk == self.category_pk:
+                    category_name = cat.name
+                    break
+        location_name = "Not set"
+        if self.location_pk and locations:
+            for loc in locations:
+                if loc.pk == self.location_pk:
+                    location_name = loc.name
+                    break
+        click.echo(f"{'Category:':<12} {click.style(category_name, fg='green')}")
+        click.echo(f"{'Location:':<12} {click.style(location_name, fg='green')}")
+        
+        # Template status
+        if self.is_template:
+            click.secho("\nTemplate Status:", fg='bright_yellow', bold=True)
+            status = f"Existing Template: {self.part_pk}" if self.part_pk else "New Template"
+            color = 'bright_green' if self.part_pk else 'bright_yellow'
+            click.echo(f"{'Status:':<15} {click.style(status, fg=color)}")
+        
+        click.secho("\n" + "="*80, fg='bright_cyan')
 
 
     def edit_parameters(self):

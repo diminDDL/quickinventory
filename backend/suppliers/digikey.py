@@ -43,18 +43,18 @@ class DigiKey(baseSupplier):
         parameters = self._mapParameters(response["Product"]["Parameters"])
 
         return PartData(
+            name = response["Product"]["ManufacturerProductNumber"],
             supplier_pn = response["Product"]["ProductVariations"][0]["DigiKeyProductNumber"],
             manufacturer_pn = response["Product"]["ManufacturerProductNumber"],
-            name = response["Product"]["ManufacturerProductNumber"],
             description = response["Product"]["Description"]["ProductDescription"],
-            parameters = parameters,
-            template_description = response["Product"]["Description"]["ProductDescription"],
             remote_image = response["Product"]["PhotoUrl"],
             link = response["Product"]["ProductUrl"],
             unit_price = response["Product"]["UnitPrice"],
+            parameters = parameters,
             keywords= f"{response["Product"]["ProductVariations"][0]["DigiKeyProductNumber"]}, {response["Product"]["ManufacturerProductNumber"]}",
-            # Backwards compatibility with component templates 
-            package = next((param["ValueText"] for param in response["Product"]["Parameters"] if param["ParameterId"] == 16), "")
+            minimum_stock = None,
+            part_count = None,
+            note = None 
         )
 
     def __query2dcode(self, code: str):

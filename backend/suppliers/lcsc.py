@@ -68,7 +68,7 @@ class LCSC(baseSupplier):
                     if len(cells) >= 2:
                         key = r.xpath("string(./td[1])").get().strip()
                         val = r.xpath("string(./td[2])").get().strip()
-                        if key.lower().replace(" ", "") in NORMALIZED_PARAM_NAMES.keys():
+                        if key.lower().replace(" ", "") in NORMALIZED_PARAM_NAMES.keys() and val != "-":
                             parameters.append(Parameter(
                                 name = key, value_str = val
                             ))
@@ -77,18 +77,18 @@ class LCSC(baseSupplier):
                 data = json.loads(sel.xpath("/html/head/script[12]/text()").get())
 
                 return PartData(
+                    name = data["name"],
                     supplier_pn = partNumber,
                     manufacturer_pn= data["mpn"],
-                    name = data["name"],
                     description = data["description"],
-                    template_description = data["category"].split("/")[1],
-                    parameters=parameters,
                     remote_image = data["image"],
                     link = response.url,
                     unit_price = float(data["offers"]["price"]),
+                    parameters=parameters,
                     keywords= f"{partNumber}, {data["mpn"]}",
-                    # Backwards compatibility with component templates 
-                    package = re.sub(' +', ' ', self.utils.cleanhtml(sel.xpath("/html/body/div/div/div/div[1]/main/div/div/div/div/div[1]/div[1]/div[2]/table/tbody/tr[4]/td[2]/div/span").get()).strip())
+                    minimum_stock = None,
+                    part_count = None,
+                    note = None 
                 )    
 
             except Exception as e:
