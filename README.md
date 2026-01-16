@@ -10,7 +10,7 @@ pip install -r requirements.txt
 Then run using python.
 
 
-## Errors
+## Possible Errors
 
 ### ImportError: Unable to find dmtx shared library
 You need to install libdmtx. You can install it from source [here](https://github.com/dmtx/libdmtx).
@@ -26,7 +26,7 @@ sudo make install
 
 ### ImportError: Unable to find zbar shared library
 Again, missing this lib.
-If on macos, simply install with brew (`brew install zbar`
+If on macos, simply install with brew (`brew install zbar`) or install from source:
 Run:
 ```
 git clone https://github.com/mchehab/zbar
