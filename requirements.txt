@@ -1,7 +1,9 @@
 toml
 inventree
+pylibdmtx
 anytree
 requests
+lxml[html_clean]
 requests_html
 click
 parsel
