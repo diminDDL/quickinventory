@@ -1,5 +1,6 @@
 toml
 inventree
+pylibdmtx
 anytree
 requests
 requests_html
