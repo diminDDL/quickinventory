@@ -4,6 +4,8 @@ import traceback
 import click
 import cv2
 import requests
+import signal
+import threading
 from getpass import getpass
 from backend.utilities import Tools
 from backend.file import fileHandler
@@ -20,13 +22,20 @@ from backend.suppliers.tme import TME
 from backend.ui_utilities import *
 from backend.tree_utilities import *
 
-debug = False  # Set to True for debugging output
+debug = True  # Set to True for debugging output
 
 suppliers = {
     "LCSC": LCSC,           # QR code
     "DigiKey": DigiKey,     # Data Matrix ECC 200
     "TME": TME              # QR code
 }
+
+STOP_EVENT = threading.Event()
+
+def _sigint_handler(signum, frame):
+    STOP_EVENT.set()
+    # Raise so normal Python code breaks out immediately when possible
+    raise KeyboardInterrupt
 
 def clear_screen() -> None:
     os.system("cls" if os.name == "nt" else "clear")
@@ -51,6 +60,8 @@ def initialize_inventree_api(config: str) -> 'InvenTreeAPI':
     # Check if the API is working
     try:
         PartCategory.list(api)
+    except KeyboardInterrupt:
+        raise
     except Exception as e:
         print(f"Failed to connect to the InvenTree server: {e}")
         new_token = get_new_token(server_url)
@@ -206,12 +217,13 @@ def main():
             part_data.create(api, template_pk)
 
             # Add more functionality as needed
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, click.Abort):
         print("Shutdown requested...exiting")
     except Exception:
         traceback.print_exc(file=sys.stdout)
     finally:
-        sys.exit(0)
+        return
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, _sigint_handler)
     main()

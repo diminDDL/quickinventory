@@ -56,7 +56,7 @@ class LCSC(baseSupplier):
                 parameters = []
                 specification_table_path = "(//div[contains(@class, 'v-data-table__wrapper')]//table)"
                 table = sel.xpath(specification_table_path)
-                
+
                 if not table:
                     raise Exception()
                     #raise Exception(f"Product specifications table not found! xpath={specification_table_path}")
@@ -74,7 +74,14 @@ class LCSC(baseSupplier):
                             ))
 
                 # gets the content of script tag containing full info
-                data = json.loads(sel.xpath("/html/head/script[12]/text()").get())
+                raw = sel.xpath("""//head/script[
+                                  @type="application/ld+json"
+                                  and contains(., '"@type"')
+                                  and contains(., 'Product')
+                                  and contains(., '"mpn"')
+                                ]/text()
+                                """).get()
+                data = json.loads(raw) if raw else None
 
                 return PartData(
                     name = data["name"],

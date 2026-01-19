@@ -13,7 +13,7 @@ Then run using python.
 ## Possible Errors
 
 ### ImportError: Unable to find dmtx shared library
-You need to install libdmtx. You can install it from source [here](https://github.com/dmtx/libdmtx).
+You need to install libdmtx, if installing it from pip didn't work you can install it from source [here](https://github.com/dmtx/libdmtx).
 Very simply, you need to run:
 ```
 git clone https://github.com/dmtx/libdmtx
